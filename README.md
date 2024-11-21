@@ -1,7 +1,5 @@
 # HVTools
-[![Build Status](https://dev.azure.com/powers-hell/Intune.USB.Creator/_apis/build/status/tabs-not-spaces.HVTools%20-%20Publish%20Prod?branchName=master)](https://dev.azure.com/powers-hell/Intune.USB.Creator/_build/latest?definitionId=37&branchName=master)
-![PowerShell Gallery](https://img.shields.io/powershellgallery/v/HVTools.svg?style=flat&logo=powershell&label=PSGallery%20Version)
-![PSGallery Downloads](https://img.shields.io/powershellgallery/dt/HVTools.svg?style=flat&logo=powershell&label=PSGallery%20Downloads)
+
 ## Summary
 
 A set of tools to assist with the creation of Intune managed virtual machines in Hyper-V.
