@@ -6,11 +6,17 @@
 
 A set of tools to assist with the creation of Intune managed virtual machines in Hyper-V.
 
+This is very heavily based on [Intune.HV.Tools](https://github.com/tabs-not-spaces/Intune.HV.Tools).
+
+Fixed the Autopilot Deployment JSON method.
+Working on adding Autopilot V2. See seperate branch.
+
 Created in collaboration with:
 
 - [AdamGrossTX](https://github.com/AdamGrossTX)
 - [brucesa85](https://github.com/brucesa85)
 - [OnPremCloudGuy](https://github.com/onpremcloudguy)
+- [tabs-not-spaces](https://github.com/tabs-not-spaces)
 
 ## Pre-Reqs
 
