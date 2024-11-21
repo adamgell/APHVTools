@@ -22,7 +22,7 @@ Created in collaboration with:
 - [Microsoft.Graph.Intune](https://www.powershellgallery.com/packages/Microsoft.Graph.Intune/)
 - [Hyper-ConvertImage](https://www.powershellgallery.com/packages/Hyper-ConvertImage/)
 - [PowerShell 7](https://docs.microsoft.com/en-us/powershell/scripting/install/installing-powershell-core-on-windows?view=powershell-7)
-- A copy of Windows 10 (Multi-format ISO recommended)
+- A copy of Windows 10 or Windows 11 (Multi-format ISO recommended)
 
 ## How to use
 

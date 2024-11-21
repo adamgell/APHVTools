@@ -17,15 +17,28 @@ function New-ClientVM {
 
         [parameter(Position = 5, Mandatory = $false)]
         [ValidateRange(2gb, 20gb)]
-        [int64]$VMMemory,
+        [int64]$VMMemory = 4GB,
 
         [parameter(Position = 6, Mandatory = $false)]
-        [switch]$SkipAutoPilot
+        [switch]$SkipAutoPilot,
+
+        [parameter(Position = 7, Mandatory = $false)]
+        [switch]$UseAutopilotV2,
+
+        [parameter(Position = 8, Mandatory = $false)]
+        [string]$Manufacturer = "Microsoft",
+
+        [parameter(Position = 9, Mandatory = $false)]
+        [string]$Model = "Hyper-V Virtual Machine",
+
+        [parameter(Position = 10, Mandatory = $false)]
+        [switch]$Force
     )
     try {
-        #region Config
-        #pre-load HV module..
+        # Pre-load HV module
         Get-Command -Module 'Hyper-V' | Out-Null
+
+        # Get client and image details from config
         $clientDetails = $script:hvConfig.tenantConfig | Where-Object { $_.TenantName -eq $TenantName }
         if ($OSBuild) {
             $imageDetails = $script:hvConfig.images | Where-Object { $_.imageName -eq $OSBuild }
@@ -33,8 +46,10 @@ function New-ClientVM {
         else {
             $imageDetails = $script:hvConfig.images | Where-Object { $_.imageName -eq $clientDetails.imageName }
         }
+
+        # Validate paths and configuration
         $clientPath = "$($script:hvConfig.vmPath)\$($TenantName)"
-        if($imageDetails.refimagePath -like '*wks$($ImageName)ref.vhdx'){
+        if ($imageDetails.refimagePath -like '*wks$($ImageName)ref.vhdx') {
             if (!(Test-Path $imageDetails.imagePath -ErrorAction SilentlyContinue)) {
                 throw "Installation media not found at location: $($imageDetails.imagePath)"
             }
@@ -43,66 +58,99 @@ function New-ClientVM {
             New-Item -ItemType Directory -Force -Path $clientPath | Out-Null
         }
 
+        # Log configuration details
         Write-Verbose "Autopilot Reference VHDX: $($imageDetails.refImagePath)"
         Write-Verbose "Client name: $TenantName"
-        Write-Verbose "Win10 ISO is located:  $($imageDetails.imagePath)"
-        Write-Verbose "Path to client VMs will be: $clientPath"
-        Write-Verbose "Number of VMs to create:  $NumberOfVMs"
-        Write-Verbose "Admin user for $TenantName is:  $($clientDetails.adminUpn)`n"
-        #endregion
+        Write-Verbose "Win10/11 ISO location: $($imageDetails.imagePath)"
+        Write-Verbose "Client VM path: $clientPath"
+        Write-Verbose "Number of VMs: $NumberOfVMs"
+        Write-Verbose "Admin user: $($clientDetails.adminUpn)"
+        if ($UseAutopilotV2) {
+            Write-Verbose "Using Autopilot V2 with Manufacturer: $Manufacturer, Model: $Model"
+        }
 
-        #region Check for ref image - if it's not there, build it
+        # Check for Windows version compatibility if using Autopilot V2
+        if ($UseAutopilotV2) {
+            Write-Host "Note: Autopilot V2 requires Windows 10 KB5039299 (OS Build 19045.4598) or later" -ForegroundColor Yellow
+            if (!$Force) {
+                $confirmation = Read-Host "Are you sure your image meets this requirement? (Y/N)"
+                if ($confirmation -ne 'Y') {
+                    throw "Operation cancelled by user"
+                }
+            }
+        }
+
+        # Create or verify reference image
         if (!(Test-Path -Path $imageDetails.refImagePath -ErrorAction SilentlyContinue)) {
             Write-Host "Creating reference Autopilot VHDX - this may take some time.." -ForegroundColor Yellow
             New-ClientVHDX -vhdxPath $imageDetails.refImagePath -winIso $imageDetails.imagePath
             Write-Host "Reference Autopilot VHDX has been created.." -ForegroundColor Yellow
         }
-        #endregion
-        #region Get Autopilot policy
+
+        # Get Autopilot policy if needed
         if (!($SkipAutoPilot)) {
             Write-Host "Grabbing Autopilot config.." -ForegroundColor Yellow
             Get-AutopilotPolicy -FileDestination "$clientPath"
         }
-        #endregion
-        #region Build the client VMs
-        if (!(Test-Path -Path $clientPath -ErrorAction SilentlyContinue)) {
-            New-Item -Path $clientPath -ItemType Directory -Force | Out-Null
-        }
+
+        # Prepare VM creation parameters
         $vmParams = @{
-            ClientPath  = $clientPath
-            RefVHDX     = $imageDetails.refImagePath
+            ClientPath = $clientPath
+            RefVHDX = $imageDetails.refImagePath
             VSwitchName = $script:hvConfig.vSwitchName
-            CPUCount    = $CPUsPerVM
-            VMMMemory   = $VMMemory
+            CPUCount = $CPUsPerVM
+            VMMMemory = $VMMemory
+            UseAutopilotV2 = $UseAutopilotV2
+            Manufacturer = $Manufacturer
+            Model = $Model
         }
+
         if ($SkipAutoPilot) {
             $vmParams.skipAutoPilot = $true
         }
         if ($script:hvConfig.vLanId) {
             $vmParams.VLanId = $script:hvConfig.vLanId
         }
+
+        # Create VMs
+        $createdVMs = @()
         if ($numberOfVMs -eq 1) {
-            $max = ((Get-VM -Name "$TenantName*").name -replace "\D" | Measure-Object -Maximum | Select-Object -ExpandProperty Maximum) + 1
+            $max = ((Get-VM -Name "$TenantName*").name -replace "\D" |
+                   Measure-Object -Maximum |
+                   Select-Object -ExpandProperty Maximum) + 1
             $vmParams.VMName = "$($TenantName)_$max"
             Write-Host "Creating VM: $($vmParams.VMName).." -ForegroundColor Yellow
-            New-ClientDevice @vmParams
+            $createdVMs += New-ClientDevice @vmParams
         }
         else {
             (1..$NumberOfVMs) | ForEach-Object {
-                $max = ((Get-VM -Name "$TenantName*").name -replace "\D" | Measure-Object -Maximum | Select-Object -ExpandProperty Maximum) + 1
+                $max = ((Get-VM -Name "$TenantName*").name -replace "\D" |
+                       Measure-Object -Maximum |
+                       Select-Object -ExpandProperty Maximum) + 1
                 $vmParams.VMName = "$($TenantName)_$max"
                 Write-Host "Creating VM: $($vmParams.VMName).." -ForegroundColor Yellow
-                New-ClientDevice @vmParams
+                $createdVMs += New-ClientDevice @vmParams
             }
         }
-        #endregion
+
+        # Output summary
+        Write-Host "`nVM Creation Summary:" -ForegroundColor Cyan
+        foreach ($vm in $createdVMs) {
+            Write-Host "VM Name: $($vm.VMName)" -ForegroundColor Green
+            Write-Host "Serial Number: $($vm.SerialNumber)" -ForegroundColor Green
+            Write-Host "Path: $($vm.Path)" -ForegroundColor Green
+            Write-Host "------------------"
+        }
+
+        if ($UseAutopilotV2) {
+            Write-Host "`nAll VMs have been registered with Autopilot V2 corporate identifiers" -ForegroundColor Green
+            Write-Host "Please ensure your Autopilot deployment profile is configured correctly" -ForegroundColor Yellow
+        }
+
+        return $createdVMs
     }
     catch {
-        $errorMsg = $_.Exception.Message
-    }
-    finally {
-        if ($errorMsg) {
-            Write-Warning $errorMsg
-        }
+        Write-Error "Error creating VMs: $_"
+        throw
     }
 }

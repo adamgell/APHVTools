@@ -16,7 +16,7 @@ try {
     }
 
     if ($buildLocal) {
-        [int32]$env:BUILD_BUILDID = 420
+        [int32]$env:BUILD_BUILDID = 69
         if (Test-Path $PSScriptRoot\localenv.ps1 -ErrorAction SilentlyContinue) {
             . $PSScriptRoot\localenv.ps1
         }
