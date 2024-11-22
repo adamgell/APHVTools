@@ -1,23 +1,21 @@
-function Get-CorporateIdentifiers {
+function Get-CorporateIdentifier {
     [CmdletBinding()]
     param()
 
     try {
-        # Ensure MS Graph connection
-        if (-not (Get-MgContext)) {
-            Connect-MgGraph -Scopes @(
-                "DeviceManagementServiceConfig.Read.All"
-            )
-        }
+        Write-Host "`nGetting existing device identities..." -ForegroundColor Cyan
 
-        # Get all imported device identities
-        $uri = "https://graph.microsoft.com/beta/deviceManagement/importedDeviceIdentities"
-        $response = Invoke-MgGraphRequest -Uri $uri -Method GET
+        $response = Get-MgBetaDeviceManagementImportedDeviceIdentity -Top 25
+
+        Write-Host "Found $($response.value.Count) devices:" -ForegroundColor Green
+        $response.value | ForEach-Object {
+            Write-Host "- Identifier: $($_.importedDeviceIdentifier), Type: $($_.importedDeviceIdentityType)" -ForegroundColor Gray
+        }
 
         return $response.value
     }
     catch {
         Write-Error "Failed to get corporate identifiers: $_"
-        throw
+        return @()
     }
 }

@@ -39,12 +39,17 @@ function New-ClientDevice {
         # Create the VM with base VHDX
         Copy-Item -path $RefVHDX -Destination "$ClientPath\$VMName.vhdx"
 
-        if (!($skipAutoPilot)) {
-            Publish-AutoPilotConfig -vmName $VMName -clientPath $ClientPath
+        # Configure VM
+        $vmConfig = @{
+            Name = $VMName
+            MemoryStartupBytes = $VMMMemory
+            VHDPath = "$ClientPath\$VMName.vhdx"
+            Generation = 2
         }
 
-        # Create and configure the VM
-        New-VM -Name $VMName -MemoryStartupBytes $VMMMemory -VHDPath "$ClientPath\$VMName.vhdx" -Generation 2 | Out-Null
+        New-VM @vmConfig | Out-Null
+
+        # Configure VM settings
         Enable-VMIntegrationService -vmName $VMName -Name "Guest Service Interface"
         Set-VM -name $VMName -CheckpointType Disabled
         Set-VMProcessor -VMName $VMName -Count $CPUCount
@@ -61,7 +66,7 @@ function New-ClientDevice {
 
         # Configure TPM
         $owner = Get-HgsGuardian UntrustedGuardian -ErrorAction SilentlyContinue
-        If (!$owner) {
+        if (!$owner) {
             $owner = New-HgsGuardian -Name UntrustedGuardian -GenerateCertificates
         }
         $kp = New-HgsKeyProtector -Owner $owner -AllowUntrustedRoot
@@ -76,17 +81,28 @@ function New-ClientDevice {
         # Set VM Info with Serial number
         Get-VM -Name $VMname | Set-VM -Notes "Serial# $vmSerial"
 
-        # If using Autopilot V2, register the corporate identifier
+        # Handle Autopilot registration
+        if (!$skipAutoPilot) {
+            Register-AutopilotDevice -VMName $VMName `
+                                   -SerialNumber $vmSerial `
+                                   -Manufacturer $Manufacturer `
+                                   -Model $Model `
+                                   -UseAutopilotV2:$UseAutopilotV2 `
+                                   -ClientPath $ClientPath
+        }
         if ($UseAutopilotV2) {
             Write-Host "Registering corporate identifier for Autopilot V2..." -ForegroundColor Cyan
-
-            # Get existing identifiers to avoid duplicates
-            $existingIdentifiers = Get-CorporateIdentifiers
-
-            # Add the new identifier
-            Add-CorporateIdentifier -Manufacturer $Manufacturer -Model $Model -SerialNumber $vmSerial -ImportedIdentifiers $existingIdentifiers
+            try {
+                Register-AutopilotDevice -VMName $VMName `
+                    -SerialNumber $vmSerial `
+                    -Description "Corporate Device - $VMName" `
+                    -UseAutopilotV2 `
+                    -ClientPath $ClientPath
+            }
+            catch {
+                Write-Warning "Failed to register Autopilot V2 identifier: $_"
+            }
         }
-
         # Start the VM
         Start-VM -Name $VMName
 

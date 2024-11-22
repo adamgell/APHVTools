@@ -32,10 +32,8 @@ function New-ClientVM {
         [string]$Model = "Hyper-V Virtual Machine"
     )
     try {
-        # Pre-load HV module
+        #region Config
         Get-Command -Module 'Hyper-V' | Out-Null
-
-        # Get client and image details from config
         $clientDetails = $script:hvConfig.tenantConfig | Where-Object { $_.TenantName -eq $TenantName }
         if ($OSBuild) {
             $imageDetails = $script:hvConfig.images | Where-Object { $_.imageName -eq $OSBuild }
@@ -44,7 +42,6 @@ function New-ClientVM {
             $imageDetails = $script:hvConfig.images | Where-Object { $_.imageName -eq $clientDetails.imageName }
         }
 
-        # Validate paths and configuration
         $clientPath = "$($script:hvConfig.vmPath)\$($TenantName)"
         if ($imageDetails.refimagePath -like '*wks$($ImageName)ref.vhdx') {
             if (!(Test-Path $imageDetails.imagePath -ErrorAction SilentlyContinue)) {
@@ -55,21 +52,7 @@ function New-ClientVM {
             New-Item -ItemType Directory -Force -Path $clientPath | Out-Null
         }
 
-        # Log configuration details
-        Write-Verbose "Autopilot Reference VHDX: $($imageDetails.refImagePath)"
-        Write-Verbose "Client name: $TenantName"
-        Write-Verbose "Win10/11 ISO location: $($imageDetails.imagePath)"
-        Write-Verbose "Client VM path: $clientPath"
-        Write-Verbose "Number of VMs: $NumberOfVMs"
-        Write-Verbose "Admin user: $($clientDetails.adminUpn)"
-
-        if ($UseAutopilotV2) {
-            Write-Verbose "Using Autopilot V2 with Manufacturer: $Manufacturer, Model: $Model"
-            # Force SkipAutoPilot when using AutopilotV2
-            $SkipAutoPilot = $true
-        }
-
-        # Create or verify reference image
+        # Create reference image if needed
         if (!(Test-Path -Path $imageDetails.refImagePath -ErrorAction SilentlyContinue)) {
             Write-Host "Creating reference VHDX - this may take some time.." -ForegroundColor Yellow
             New-ClientVHDX -vhdxPath $imageDetails.refImagePath -winIso $imageDetails.imagePath
@@ -82,45 +65,54 @@ function New-ClientVM {
             Get-AutopilotPolicy -FileDestination "$clientPath"
         }
 
-        # Prepare VM creation parameters
+        # Prepare VM parameters
         $vmParams = @{
             ClientPath = $clientPath
             RefVHDX = $imageDetails.refImagePath
             VSwitchName = $script:hvConfig.vSwitchName
             CPUCount = $CPUsPerVM
             VMMMemory = $VMMemory
+            UseAutopilotV2 = $UseAutopilotV2
+            Manufacturer = $Manufacturer
+            Model = $Model
         }
 
-        if ($UseAutopilotV2) {
-            $vmParams['UseAutopilotV2'] = $true
-            $vmParams['Manufacturer'] = $Manufacturer
-            $vmParams['Model'] = $Model
-            $vmParams['skipAutoPilot'] = $true
+        if ($SkipAutoPilot) {
+            $vmParams.skipAutoPilot = $true
         }
-        elseif ($SkipAutoPilot) {
-            $vmParams['skipAutoPilot'] = $true
-        }
-
         if ($script:hvConfig.vLanId) {
-            $vmParams['VLanId'] = $script:hvConfig.vLanId
+            $vmParams.VLanId = $script:hvConfig.vLanId
         }
 
         # Create VMs
         $createdVMs = @()
+
+        # Function to get next VM number
+        function Get-NextVMNumber {
+            $existingVMs = Get-VM -Name "$TenantName*" -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -match "^$TenantName`_\d+$" }
+
+            if (!$existingVMs) { return 1 }
+
+            $numbers = $existingVMs | ForEach-Object {
+                if ($_.Name -match "_(\d+)$") {
+                    [int]$matches[1]
+                }
+            } | Sort-Object
+
+            return ($numbers | Select-Object -Last 1) + 1
+        }
+
         if ($numberOfVMs -eq 1) {
-            $max = ((Get-VM -Name "$TenantName*").name -replace "\D" |
-                   Measure-Object -Maximum |
-                   Select-Object -ExpandProperty Maximum) + 1
-            $vmParams.VMName = "$($TenantName)_$max"
+            $nextNum = Get-NextVMNumber
+            $vmParams.VMName = "${TenantName}_$nextNum"
             Write-Host "Creating VM: $($vmParams.VMName).." -ForegroundColor Yellow
             $createdVMs += New-ClientDevice @vmParams
         }
         else {
-            (1..$NumberOfVMs) | ForEach-Object {
-                $max = ((Get-VM -Name "$TenantName*").name -replace "\D" |
-                       Measure-Object -Maximum |
-                       Select-Object -ExpandProperty Maximum) + 1
-                $vmParams.VMName = "$($TenantName)_$max"
+            1..$NumberOfVMs | ForEach-Object {
+                $nextNum = Get-NextVMNumber
+                $vmParams.VMName = "${TenantName}_$nextNum"
                 Write-Host "Creating VM: $($vmParams.VMName).." -ForegroundColor Yellow
                 $createdVMs += New-ClientDevice @vmParams
             }

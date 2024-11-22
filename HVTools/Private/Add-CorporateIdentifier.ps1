@@ -2,59 +2,59 @@ function Add-CorporateIdentifier {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory = $true)]
-        [string]$Manufacturer,
-
-        [Parameter(Mandatory = $true)]
-        [string]$Model,
-
-        [Parameter(Mandatory = $true)]
-        [string]$SerialNumber,
+        [string]$ImportedDeviceIdentifier,
 
         [Parameter(Mandatory = $false)]
-        [string[]]$ImportedIdentifiers
+        [string]$ImportedDeviceIdentityType = "serialNumber",
+
+        [Parameter(Mandatory = $false)]
+        [string]$Description = "Corporate Device",
+
+        [Parameter(Mandatory = $false)]
+        [string]$EnrollmentState = "enrolled",
+
+        [Parameter(Mandatory = $false)]
+        [string]$Platform = "windows"
     )
 
     try {
-        # Ensure MS Graph connection
-        if (-not (Get-MgContext)) {
-            Connect-MgGraph -Scopes @(
-                "DeviceManagementServiceConfig.ReadWrite.All"
+        # Validate input parameters
+        if (-not $ImportedDeviceIdentifier) {
+            throw "Device identifier is required."
+        }
+
+        # Clean identifier (remove dashes)
+        $ImportedDeviceIdentifier = $ImportedDeviceIdentifier.Replace("-", "")
+
+        Write-Host "Adding device with identifier: $ImportedDeviceIdentifier" -ForegroundColor Yellow
+
+        $params = @{
+            overwriteImportedDeviceIdentities = $false
+            importedDeviceIdentities = @(
+                @{
+                    importedDeviceIdentityType = $ImportedDeviceIdentityType
+                    importedDeviceIdentifier = $ImportedDeviceIdentifier
+                    description = $Description
+                    enrollmentState = $EnrollmentState
+                    platform = $Platform
+                }
             )
         }
 
-        # Clean serial number (remove periods)
-        $SerialNumber = $SerialNumber.Replace(".", "")
+        Write-Verbose "Request body:"
+        Write-Verbose ($params | ConvertTo-Json)
 
-        # Format the identifier string
-        $identifier = "$Manufacturer,$Model,$SerialNumber"
+        $response = Import-MgBetaDeviceManagementImportedDeviceIdentityList -BodyParameter $params
+        Write-Verbose "Device added successfully"
+        Write-Verbose ($response | ConvertTo-Json)
 
-        # Check if identifier already exists
-        if ($ImportedIdentifiers -contains $identifier) {
-            Write-Verbose "Identifier already exists: $identifier"
-            return
-        }
-
-        # Prepare the request body for Autopilot V2
-        $body = @{
-            "@odata.type" = "#microsoft.graph.importedDeviceIdentity"
-            "importedDeviceIdentifier" = $SerialNumber
-            "importedDeviceIdentityType" = "serialNumber"
-            "platform" = "windows"
-            "description" = "$Model by $Manufacturer"
-        }
-
-        Write-Verbose "Request Body:"
-        Write-Verbose ($body | ConvertTo-Json)
-
-        # Make the Graph API call
-        $uri = "https://graph.microsoft.com/beta/deviceManagement/importedDeviceIdentities"
-        $response = Invoke-MgGraphRequest -Uri $uri -Method POST -Body ($body | ConvertTo-Json)
-
-        Write-Host "Successfully added corporate identifier for $Model (Serial: $SerialNumber)" -ForegroundColor Green
         return $response
     }
     catch {
         Write-Error "Failed to add corporate identifier: $_"
+        if ($_.ErrorDetails) {
+            Write-Error $_.ErrorDetails.Message
+        }
         throw
     }
 }
