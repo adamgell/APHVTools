@@ -73,18 +73,16 @@ function New-ClientDevice {
         Set-VMKeyProtector -VMName $VMName -KeyProtector $kp.RawData
         Enable-VMTPM -VMName $VMName
 
-        # Get VM Serial Number
-        $vmSerial = (Get-CimInstance -Namespace root\virtualization\v2 -class Msvm_VirtualSystemSettingData |
-            Where-Object { ($_.VirtualSystemType -eq "Microsoft:Hyper-V:System:Realized") -and
-                         ($_.elementname -eq $VMName) }).BIOSSerialNumber
+        # Set VM BIOS GUID and get serial number
+        $serial = Set-VMBiosGuid -VMName $VMName
 
         # Set VM Info with Serial number
-        Get-VM -Name $VMname | Set-VM -Notes "Serial# $vmSerial"
+        Get-VM -Name $VMname | Set-VM -Notes "Serial# $serial"
 
         # Handle Autopilot registration
         if (!$skipAutoPilot) {
             Register-AutopilotDevice -VMName $VMName `
-                                   -SerialNumber $vmSerial `
+                                   -SerialNumber $serial `
                                    -Manufacturer $Manufacturer `
                                    -Model $Model `
                                    -UseAutopilotV2:$UseAutopilotV2 `
@@ -94,7 +92,7 @@ function New-ClientDevice {
             Write-Host "Registering corporate identifier for Autopilot V2..." -ForegroundColor Cyan
             try {
                 Register-AutopilotDevice -VMName $VMName `
-                    -SerialNumber $vmSerial `
+                    -SerialNumber $serial `
                     -Description "Corporate Device - $VMName" `
                     -UseAutopilotV2 `
                     -ClientPath $ClientPath
@@ -103,13 +101,14 @@ function New-ClientDevice {
                 Write-Warning "Failed to register Autopilot V2 identifier: $_"
             }
         }
+
         # Start the VM
         Start-VM -Name $VMName
 
         # Return VM information
         return @{
             VMName = $VMName
-            SerialNumber = $vmSerial
+            SerialNumber = $serial
             Path = "$ClientPath\$VMName.vhdx"
         }
     }
