@@ -2,13 +2,7 @@ function Remove-CorporateIdentifier {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory = $true)]
-        [string]$Manufacturer,
-
-        [Parameter(Mandatory = $true)]
-        [string]$Model,
-
-        [Parameter(Mandatory = $true)]
-        [string]$SerialNumber
+        [string]$Id
     )
 
     try {
@@ -19,29 +13,11 @@ function Remove-CorporateIdentifier {
             )
         }
 
-        # Clean serial number
-        $SerialNumber = $SerialNumber.Replace(".", "")
+        # Delete the identifier by ID
+        $uri = "https://graph.microsoft.com/beta/deviceManagement/importedDeviceIdentities/$Id"
+        $null = Invoke-MgGraphRequest -Uri $uri -Method DELETE
 
-        # Get current identifiers
-        $uri = "https://graph.microsoft.com/beta/deviceManagement/importedDeviceIdentities"
-        $response = Invoke-MgGraphRequest -Uri $uri -Method GET
-
-        # Find matching identifier
-        $identifier = $response.value | Where-Object {
-            $_.manufacturer -eq $Manufacturer -and
-            $_.model -eq $Model -and
-            $_.serialNumber -eq $SerialNumber
-        }
-
-        if ($identifier) {
-            # Delete the identifier
-            $deleteUri = "$uri/$($identifier.id)"
-            $null = Invoke-MgGraphRequest -Uri $deleteUri -Method DELETE
-            Write-Host "Successfully removed corporate identifier for $Model (Serial: $SerialNumber)" -ForegroundColor Green
-        }
-        else {
-            Write-Warning "No matching corporate identifier found"
-        }
+        Write-Host "Successfully removed corporate identifier" -ForegroundColor Green
     }
     catch {
         Write-Error "Failed to remove corporate identifier: $_"

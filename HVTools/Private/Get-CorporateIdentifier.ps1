@@ -14,12 +14,7 @@ function Get-CorporateIdentifiers {
         $uri = "https://graph.microsoft.com/beta/deviceManagement/importedDeviceIdentities"
         $response = Invoke-MgGraphRequest -Uri $uri -Method GET
 
-        # Format the response into identifier strings
-        $identifiers = $response.value | ForEach-Object {
-            "$($_.manufacturer),$($_.model),$($_.serialNumber)"
-        }
-
-        return $identifiers
+        return $response.value
     }
     catch {
         Write-Error "Failed to get corporate identifiers: $_"

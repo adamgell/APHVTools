@@ -29,10 +29,7 @@ function New-ClientVM {
         [string]$Manufacturer = "Microsoft",
 
         [parameter(Position = 9, Mandatory = $false)]
-        [string]$Model = "Hyper-V Virtual Machine",
-
-        [parameter(Position = 10, Mandatory = $false)]
-        [switch]$Force
+        [string]$Model = "Hyper-V Virtual Machine"
     )
     try {
         # Pre-load HV module
@@ -46,43 +43,6 @@ function New-ClientVM {
         else {
             $imageDetails = $script:hvConfig.images | Where-Object { $_.imageName -eq $clientDetails.imageName }
         }
-        # Validate virtual switch
-        if (!$script:hvConfig.vSwitchName) {
-            throw "No virtual switch configured. Please run Update-HVToolsConfig to configure a virtual switch."
-        }
-
-        if (!(Get-VMSwitch -Name $script:hvConfig.vSwitchName -ErrorAction SilentlyContinue)) {
-            throw "Configured virtual switch '$($script:hvConfig.vSwitchName)' not found. Please run Update-HVToolsConfig to select a valid switch."
-        }
-
-        # Validate image details
-        if (!$imageDetails) {
-            $availableImages = $script:hvConfig.images.imageName | Select-Object -Unique
-            throw "Image '$OSBuild' not found. Available images: $($availableImages -join ', ')"
-        }
-
-        # Validate reference image path
-        if (![System.IO.Path]::IsPathRooted($imageDetails.refImagePath)) {
-            throw "Invalid reference image path: $($imageDetails.refImagePath). Path must be absolute."
-        }
-
-        # Create reference path directory if it doesn't exist
-        $refImageDir = Split-Path $imageDetails.refImagePath -Parent
-        if (!(Test-Path $refImageDir)) {
-            New-Item -Path $refImageDir -ItemType Directory -Force | Out-Null
-        }
-
-        # Validate ISO path
-        if (!(Test-Path $imageDetails.imagePath)) {
-            throw "Windows ISO not found at: $($imageDetails.imagePath)"
-        }
-
-        # Debug output
-        Write-Verbose "Configuration validation passed:"
-        Write-Verbose "Virtual Switch: $($script:hvConfig.vSwitchName)"
-        Write-Verbose "Image Name: $($imageDetails.imageName)"
-        Write-Verbose "ISO Path: $($imageDetails.imagePath)"
-        Write-Verbose "Reference VHDX: $($imageDetails.refImagePath)"
 
         # Validate paths and configuration
         $clientPath = "$($script:hvConfig.vmPath)\$($TenantName)"
@@ -102,26 +62,18 @@ function New-ClientVM {
         Write-Verbose "Client VM path: $clientPath"
         Write-Verbose "Number of VMs: $NumberOfVMs"
         Write-Verbose "Admin user: $($clientDetails.adminUpn)"
+
         if ($UseAutopilotV2) {
             Write-Verbose "Using Autopilot V2 with Manufacturer: $Manufacturer, Model: $Model"
-        }
-
-        # Check for Windows version compatibility if using Autopilot V2
-        if ($UseAutopilotV2) {
-            Write-Host "Note: Autopilot V2 requires Windows 10 KB5039299 (OS Build 19045.4598) or later" -ForegroundColor Yellow
-            if (!$Force) {
-                $confirmation = Read-Host "Are you sure your image meets this requirement? (Y/N)"
-                if ($confirmation -ne 'Y') {
-                    throw "Operation cancelled by user"
-                }
-            }
+            # Force SkipAutoPilot when using AutopilotV2
+            $SkipAutoPilot = $true
         }
 
         # Create or verify reference image
         if (!(Test-Path -Path $imageDetails.refImagePath -ErrorAction SilentlyContinue)) {
-            Write-Host "Creating reference Autopilot VHDX - this may take some time.." -ForegroundColor Yellow
+            Write-Host "Creating reference VHDX - this may take some time.." -ForegroundColor Yellow
             New-ClientVHDX -vhdxPath $imageDetails.refImagePath -winIso $imageDetails.imagePath
-            Write-Host "Reference Autopilot VHDX has been created.." -ForegroundColor Yellow
+            Write-Host "Reference VHDX has been created.." -ForegroundColor Yellow
         }
 
         # Get Autopilot policy if needed
@@ -130,22 +82,22 @@ function New-ClientVM {
             Get-AutopilotPolicy -FileDestination "$clientPath"
         }
 
-        # Update the vmParams section
+        # Prepare VM creation parameters
         $vmParams = @{
-            ClientPath  = $clientPath
-            RefVHDX     = $imageDetails.refImagePath
+            ClientPath = $clientPath
+            RefVHDX = $imageDetails.refImagePath
             VSwitchName = $script:hvConfig.vSwitchName
-            CPUCount    = $CPUsPerVM
-            VMMMemory   = $VMMemory
+            CPUCount = $CPUsPerVM
+            VMMMemory = $VMMemory
         }
 
         if ($UseAutopilotV2) {
             $vmParams['UseAutopilotV2'] = $true
             $vmParams['Manufacturer'] = $Manufacturer
             $vmParams['Model'] = $Model
+            $vmParams['skipAutoPilot'] = $true
         }
-
-        if ($SkipAutoPilot) {
+        elseif ($SkipAutoPilot) {
             $vmParams['skipAutoPilot'] = $true
         }
 
@@ -153,27 +105,12 @@ function New-ClientVM {
             $vmParams['VLanId'] = $script:hvConfig.vLanId
         }
 
-        Write-Verbose "Debug: VM Parameters"
-        Write-Verbose ($vmParams | ConvertTo-Json)
-
-        # Before creating the VM
-        if ([string]::IsNullOrEmpty($vmParams.RefVHDX)) {
-            throw "Reference VHDX path is null or empty. Image details may be incorrect."
-        }
-
-        if (!(Test-Path $vmParams.RefVHDX)) {
-            throw "Reference VHDX not found at: $($vmParams.RefVHDX)"
-        }
-
         # Create VMs
-        Write-Verbose "Debug: Image Details"
-        Write-Verbose ($imageDetails | ConvertTo-Json)
-        Write-Verbose "Reference VHDX Path: $($imageDetails.refImagePath)"
         $createdVMs = @()
         if ($numberOfVMs -eq 1) {
             $max = ((Get-VM -Name "$TenantName*").name -replace "\D" |
-                Measure-Object -Maximum |
-                Select-Object -ExpandProperty Maximum) + 1
+                   Measure-Object -Maximum |
+                   Select-Object -ExpandProperty Maximum) + 1
             $vmParams.VMName = "$($TenantName)_$max"
             Write-Host "Creating VM: $($vmParams.VMName).." -ForegroundColor Yellow
             $createdVMs += New-ClientDevice @vmParams
@@ -181,8 +118,8 @@ function New-ClientVM {
         else {
             (1..$NumberOfVMs) | ForEach-Object {
                 $max = ((Get-VM -Name "$TenantName*").name -replace "\D" |
-                    Measure-Object -Maximum |
-                    Select-Object -ExpandProperty Maximum) + 1
+                       Measure-Object -Maximum |
+                       Select-Object -ExpandProperty Maximum) + 1
                 $vmParams.VMName = "$($TenantName)_$max"
                 Write-Host "Creating VM: $($vmParams.VMName).." -ForegroundColor Yellow
                 $createdVMs += New-ClientDevice @vmParams
@@ -200,7 +137,6 @@ function New-ClientVM {
 
         if ($UseAutopilotV2) {
             Write-Host "`nAll VMs have been registered with Autopilot V2 corporate identifiers" -ForegroundColor Green
-            Write-Host "Please ensure your Autopilot deployment profile is configured correctly" -ForegroundColor Yellow
         }
 
         return $createdVMs

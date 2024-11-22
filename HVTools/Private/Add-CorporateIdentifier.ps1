@@ -28,22 +28,23 @@ function Add-CorporateIdentifier {
         # Format the identifier string
         $identifier = "$Manufacturer,$Model,$SerialNumber"
 
-        # Check if identifier already exists in imported list
+        # Check if identifier already exists
         if ($ImportedIdentifiers -contains $identifier) {
             Write-Verbose "Identifier already exists: $identifier"
             return
         }
 
-        # Prepare the request body
+        # Prepare the request body for Autopilot V2
         $body = @{
-            importedDeviceIdentifiers = @(
-                @{
-                    manufacturer = $Manufacturer
-                    model = $Model
-                    serialNumber = $SerialNumber
-                }
-            )
+            "@odata.type" = "#microsoft.graph.importedDeviceIdentity"
+            "importedDeviceIdentifier" = $SerialNumber
+            "importedDeviceIdentityType" = "serialNumber"
+            "platform" = "windows"
+            "description" = "$Model by $Manufacturer"
         }
+
+        Write-Verbose "Request Body:"
+        Write-Verbose ($body | ConvertTo-Json)
 
         # Make the Graph API call
         $uri = "https://graph.microsoft.com/beta/deviceManagement/importedDeviceIdentities"
