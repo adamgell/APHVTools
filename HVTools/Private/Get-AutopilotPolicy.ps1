@@ -1,8 +1,3 @@
-# Updated Get-AutopilotPolicy.ps1
-#requires -Modules @{ ModuleName="Microsoft.Graph.Authentication"; ModuleVersion="2.0.0" }
-#requires -Modules @{ ModuleName="Microsoft.Graph.DeviceManagement"; ModuleVersion="2.0.0" }
-#requires -Modules @{ ModuleName="Microsoft.Graph.DeviceManagement.Enrollment"; ModuleVersion="2.0.0" }
-
 function Get-AutopilotPolicy {
     [cmdletbinding()]
     param (
@@ -11,76 +6,73 @@ function Get-AutopilotPolicy {
     )
     try {
         if (!(Test-Path "$FileDestination\AutopilotConfigurationFile.json" -ErrorAction SilentlyContinue)) {
+            # Import required modules
             $modules = @(
-                "Microsoft.Graph.Authentication",
-                "Microsoft.Graph.DeviceManagement",
-                "Microsoft.Graph.DeviceManagement.Enrollment"
+                @{Name = "Microsoft.Graph.Authentication"; MinimumVersion = "2.0.0"}
+                @{Name = "Microsoft.Graph.DeviceManagement"; MinimumVersion = "2.0.0"}
+                @{Name = "Microsoft.Graph.DeviceManagement.Administration"; MinimumVersion = "2.0.0"}
+                @{Name = "Microsoft.Graph.DeviceManagement.Enrollment"; MinimumVersion = "2.0.0"}
             )
 
-            # Import modules properly for PowerShell 7 compatibility
-            if ($PSVersionTable.PSVersion.Major -eq 7) {
-                $modules | ForEach-Object {
-                    Import-Module $_ -UseWindowsPowerShell -ErrorAction SilentlyContinue 3>$null
+            foreach ($module in $modules) {
+                if (!(Get-Module -ListAvailable -Name $module.Name | Where-Object { $_.Version -ge $module.MinimumVersion })) {
+                    Write-Host "Installing $($module.Name)..." -ForegroundColor Yellow
+                    Install-Module -Name $module.Name -MinimumVersion $module.MinimumVersion -Force -AllowClobber
                 }
-            }
-            else {
-                $modules | ForEach-Object {
-                    Import-Module $_
-                }
+                Import-Module -Name $module.Name -MinimumVersion $module.MinimumVersion -Force
             }
 
-            # Connect to Microsoft Graph with proper scopes
+            # Connect to Microsoft Graph
             if (-not (Get-MgContext)) {
                 Connect-MgGraph -Scopes @(
                     "DeviceManagementServiceConfig.Read.All",
-                    "DeviceManagementConfiguration.Read.All"
+                    "DeviceManagementConfiguration.Read.All",
+                    "Organization.Read.All"
                 )
             }
 
             # Get Autopilot deployment profiles
-            $autopilotProfiles = Get-MgDeviceManagementWindowsAutopilotDeploymentProfile
+            $uri = "https://graph.microsoft.com/beta/deviceManagement/windowsAutopilotDeploymentProfiles"
+            $autopilotProfiles = Invoke-MgGraphRequest -Uri $uri -Method GET
+            $profiles = $autopilotProfiles.value
 
-            if (!($autopilotProfiles)) {
+            if (!($profiles)) {
                 Write-Warning "No Autopilot policies found.."
             }
             else {
-                if ($autopilotProfiles.Count -gt 1) {
+                $selectedProfile = if ($profiles.Count -gt 1) {
                     Write-Host "Multiple Autopilot policies found - select the correct one.." -ForegroundColor Cyan
-                    $selectedProfile = $autopilotProfiles | Select-Object DisplayName, Id, Description |
+                    $profiles | Select-Object displayName, id, description |
                         Out-GridView -Title 'Select AutoPilot Profile' -PassThru
                 }
                 else {
                     Write-Host "Policy found - saving to $FileDestination.." -ForegroundColor Cyan
-                    $selectedProfile = $autopilotProfiles[0]
+                    $profiles[0]
                 }
 
                 if ($selectedProfile) {
-                    # Get detailed profile configuration
-                    $profileConfig = @{
-                        "CloudAssignedTenantId" = (Get-MgContext).TenantId
-                        "CloudAssignedDeviceNameTemplate" = $selectedProfile.DeviceNameTemplate
-                        "Version" = 2049
-                        "CloudAssignedAutopilotUpdateTimeout" = 1800000
-                        "CloudAssignedLanguage" = $selectedProfile.Language
-                        "CloudAssignedOobeSettings" = @{
-                            "SkipKeyboard" = $true
-                            "SkipTimeZone" = $true
-                            "SkipConnectivityCheck" = $false
-                            "SkipUserAuthentication" = $false
-                        }
-                        "CloudAssignedEnrollmentType" = switch ($selectedProfile.DeviceJoinType) {
-                            "azureADJoined" { 0 }
-                            "azureADJoinedWithAutopilot" { 1 }
-                            default { 0 }
-                        }
-                        "CloudAssignedAutopilotUpdateDisabled" = -not $selectedProfile.EnableAutopilotUpdateOnFirstLogin
+                    # Create directory if it doesn't exist
+                    if (!(Test-Path $FileDestination)) {
+                        New-Item -Path $FileDestination -ItemType Directory -Force | Out-Null
                     }
 
-                    # Save configuration
-                    $profileConfig | ConvertTo-Json -Depth 10 |
-                        Out-File "$FileDestination\AutopilotConfigurationFile.json" -Encoding ascii -Force
+                    # Convert to JSON configuration
+                    $json = @{
+                        "Comment_File" = "Profile $($selectedProfile.displayName)"
+                        "Version" = 2049
+                        "ZtdCorrelationId" = $selectedProfile.id
+                        "CloudAssignedTenantId" = (Get-MgOrganization).Id
+                        "CloudAssignedDeviceName" = $selectedProfile.deviceNameTemplate
+                        "CloudAssignedAutopilotUpdateDisabled" = -not $selectedProfile.enableAutopilotUpdateOnFirstLogin
+                        "CloudAssignedAutopilotUpdateTimeout" = 1800000
+                        "CloudAssignedForcedEnrollment" = 1
+                        "CloudAssignedOobeConfig" = 8 + 256
+                    } | ConvertTo-Json -Depth 10
 
-                    Write-Host "Autopilot profile saved: $($selectedProfile.DisplayName)" -ForegroundColor Green
+                    # Save configuration
+                    $json | Out-File "$FileDestination\AutopilotConfigurationFile.json" -Encoding ascii -Force
+
+                    Write-Host "Autopilot profile saved: $($selectedProfile.displayName)" -ForegroundColor Green
                 }
             }
         }
@@ -90,12 +82,6 @@ function Get-AutopilotPolicy {
     }
     catch {
         Write-Error "Error occurred getting Autopilot policy: $_"
-    }
-    finally {
-        if ($PSVersionTable.PSVersion.Major -eq 7) {
-            $modules | ForEach-Object {
-                Remove-Module $_ -ErrorAction SilentlyContinue 3>$null
-            }
-        }
+        throw
     }
 }

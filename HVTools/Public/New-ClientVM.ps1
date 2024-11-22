@@ -46,6 +46,43 @@ function New-ClientVM {
         else {
             $imageDetails = $script:hvConfig.images | Where-Object { $_.imageName -eq $clientDetails.imageName }
         }
+        # Validate virtual switch
+        if (!$script:hvConfig.vSwitchName) {
+            throw "No virtual switch configured. Please run Update-HVToolsConfig to configure a virtual switch."
+        }
+
+        if (!(Get-VMSwitch -Name $script:hvConfig.vSwitchName -ErrorAction SilentlyContinue)) {
+            throw "Configured virtual switch '$($script:hvConfig.vSwitchName)' not found. Please run Update-HVToolsConfig to select a valid switch."
+        }
+
+        # Validate image details
+        if (!$imageDetails) {
+            $availableImages = $script:hvConfig.images.imageName | Select-Object -Unique
+            throw "Image '$OSBuild' not found. Available images: $($availableImages -join ', ')"
+        }
+
+        # Validate reference image path
+        if (![System.IO.Path]::IsPathRooted($imageDetails.refImagePath)) {
+            throw "Invalid reference image path: $($imageDetails.refImagePath). Path must be absolute."
+        }
+
+        # Create reference path directory if it doesn't exist
+        $refImageDir = Split-Path $imageDetails.refImagePath -Parent
+        if (!(Test-Path $refImageDir)) {
+            New-Item -Path $refImageDir -ItemType Directory -Force | Out-Null
+        }
+
+        # Validate ISO path
+        if (!(Test-Path $imageDetails.imagePath)) {
+            throw "Windows ISO not found at: $($imageDetails.imagePath)"
+        }
+
+        # Debug output
+        Write-Verbose "Configuration validation passed:"
+        Write-Verbose "Virtual Switch: $($script:hvConfig.vSwitchName)"
+        Write-Verbose "Image Name: $($imageDetails.imageName)"
+        Write-Verbose "ISO Path: $($imageDetails.imagePath)"
+        Write-Verbose "Reference VHDX: $($imageDetails.refImagePath)"
 
         # Validate paths and configuration
         $clientPath = "$($script:hvConfig.vmPath)\$($TenantName)"
@@ -93,31 +130,50 @@ function New-ClientVM {
             Get-AutopilotPolicy -FileDestination "$clientPath"
         }
 
-        # Prepare VM creation parameters
+        # Update the vmParams section
         $vmParams = @{
-            ClientPath = $clientPath
-            RefVHDX = $imageDetails.refImagePath
+            ClientPath  = $clientPath
+            RefVHDX     = $imageDetails.refImagePath
             VSwitchName = $script:hvConfig.vSwitchName
-            CPUCount = $CPUsPerVM
-            VMMMemory = $VMMemory
-            UseAutopilotV2 = $UseAutopilotV2
-            Manufacturer = $Manufacturer
-            Model = $Model
+            CPUCount    = $CPUsPerVM
+            VMMMemory   = $VMMemory
+        }
+
+        if ($UseAutopilotV2) {
+            $vmParams['UseAutopilotV2'] = $true
+            $vmParams['Manufacturer'] = $Manufacturer
+            $vmParams['Model'] = $Model
         }
 
         if ($SkipAutoPilot) {
-            $vmParams.skipAutoPilot = $true
+            $vmParams['skipAutoPilot'] = $true
         }
+
         if ($script:hvConfig.vLanId) {
-            $vmParams.VLanId = $script:hvConfig.vLanId
+            $vmParams['VLanId'] = $script:hvConfig.vLanId
+        }
+
+        Write-Verbose "Debug: VM Parameters"
+        Write-Verbose ($vmParams | ConvertTo-Json)
+
+        # Before creating the VM
+        if ([string]::IsNullOrEmpty($vmParams.RefVHDX)) {
+            throw "Reference VHDX path is null or empty. Image details may be incorrect."
+        }
+
+        if (!(Test-Path $vmParams.RefVHDX)) {
+            throw "Reference VHDX not found at: $($vmParams.RefVHDX)"
         }
 
         # Create VMs
+        Write-Verbose "Debug: Image Details"
+        Write-Verbose ($imageDetails | ConvertTo-Json)
+        Write-Verbose "Reference VHDX Path: $($imageDetails.refImagePath)"
         $createdVMs = @()
         if ($numberOfVMs -eq 1) {
             $max = ((Get-VM -Name "$TenantName*").name -replace "\D" |
-                   Measure-Object -Maximum |
-                   Select-Object -ExpandProperty Maximum) + 1
+                Measure-Object -Maximum |
+                Select-Object -ExpandProperty Maximum) + 1
             $vmParams.VMName = "$($TenantName)_$max"
             Write-Host "Creating VM: $($vmParams.VMName).." -ForegroundColor Yellow
             $createdVMs += New-ClientDevice @vmParams
@@ -125,8 +181,8 @@ function New-ClientVM {
         else {
             (1..$NumberOfVMs) | ForEach-Object {
                 $max = ((Get-VM -Name "$TenantName*").name -replace "\D" |
-                       Measure-Object -Maximum |
-                       Select-Object -ExpandProperty Maximum) + 1
+                    Measure-Object -Maximum |
+                    Select-Object -ExpandProperty Maximum) + 1
                 $vmParams.VMName = "$($TenantName)_$max"
                 Write-Host "Creating VM: $($vmParams.VMName).." -ForegroundColor Yellow
                 $createdVMs += New-ClientDevice @vmParams
