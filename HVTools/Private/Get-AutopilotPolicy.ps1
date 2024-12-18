@@ -1,8 +1,23 @@
 # Updated Get-AutopilotPolicy.ps1
-#requires -Modules @{ ModuleName="Microsoft.Graph.Authentication"; ModuleVersion="2.0.0" }
-#requires -Modules @{ ModuleName="Microsoft.Graph.DeviceManagement"; ModuleVersion="2.0.0" }
-#requires -Modules @{ ModuleName="Microsoft.Graph.DeviceManagement.Enrollment"; ModuleVersion="2.0.0" }
 
+$requiredModules = @(
+    @{ModuleName="Microsoft.Graph.Authentication"; MinimumVersion="2.25.0"},
+    @{ModuleName="Microsoft.Graph.DeviceManagement"; MinimumVersion="2.25.0"},
+    @{ModuleName="Microsoft.Graph.DeviceManagement.Enrollment"; MinimumVersion="2.25.0"},
+    @{ModuleName="Microsoft.Graph.Identity.DirectoryManagement"; MinimumVersion="2.11.1"}
+)
+
+foreach ($module in $requiredModules) {
+    if (-not (Get-Module -ListAvailable -Name $module.ModuleName | Where-Object { $_.Version -ge [version]$module.MinimumVersion })) {
+        Write-Host "Installing $($module.ModuleName)..."
+        Install-Module -Name $module.ModuleName -MinimumVersion $module.MinimumVersion -Force -AllowClobber
+    }
+
+    if (-not (Get-Module -Name $module.ModuleName)) {
+        Write-Host "Importing $($module.ModuleName)..."
+        Import-Module -Name $module.ModuleName -MinimumVersion $module.MinimumVersion -Force
+    }
+}
 function Get-AutopilotPolicy {
     [cmdletbinding()]
     param (
@@ -14,18 +29,19 @@ function Get-AutopilotPolicy {
             $modules = @(
                 "Microsoft.Graph.Authentication",
                 "Microsoft.Graph.DeviceManagement",
-                "Microsoft.Graph.DeviceManagement.Enrollment"
+                "Microsoft.Graph.DeviceManagement.Enrollment",
+                "Microsoft.Graph.Identity.DirectoryManagement"
             )
 
             # Import modules properly for PowerShell 7 compatibility
             if ($PSVersionTable.PSVersion.Major -eq 7) {
                 $modules | ForEach-Object {
-                    Import-Module $_ -UseWindowsPowerShell -ErrorAction SilentlyContinue 3>$null
+                    Import-Module $_ -UseWindowsPowerShell -ErrorAction SilentlyContinue -Force 3>$null
                 }
             }
             else {
                 $modules | ForEach-Object {
-                    Import-Module $_
+                    Import-Module $_ -Force
                 }
             }
 
@@ -37,15 +53,8 @@ function Get-AutopilotPolicy {
                 )
             }
 
-            try {
-                $uri = "https://graph.microsoft.com/beta/deviceManagement/windowsAutopilotDeploymentProfiles"
-                $response = Invoke-MgGraphRequest -Method GET -Uri $uri -ErrorAction Stop
-                $autopilotProfiles = $response.value
-            }
-            catch {
-                Write-Error "Failed to get Autopilot profiles: $_"
-                return
-            }
+            # Get Autopilot profiles using Get-AutopilotProfile function
+            $autopilotProfiles = Get-AutopilotProfile
 
             if (!($autopilotProfiles)) {
                 Write-Warning "No Autopilot policies found.."
@@ -62,31 +71,11 @@ function Get-AutopilotPolicy {
                 }
 
                 if ($selectedProfile) {
-                    $context = Get-MgContext
-                    $tenantId = $context.TenantId
-                    $tenantDomain = $context.Account -replace '.*@'
-
-                    # Create profile configuration matching exact format
-                    $profileConfig = @{
-                        "CloudAssignedOobeConfig" = 1308
-                        "ZtdCorrelationId" = [guid]::NewGuid().ToString()
-                        "CloudAssignedDeviceName" = "%SERIAL%"
-                        "Version" = 2049
-                        "CloudAssignedTenantDomain" = $tenantDomain
-                        "CloudAssignedLanguage" = "os-default"
-                        "CloudAssignedTenantId" = $tenantId
-                        "CloudAssignedAutopilotUpdateDisabled" = 1
-                        "CloudAssignedAutopilotUpdateTimeout" = 1800000
-                        "CloudAssignedDomainJoinMethod" = 0
-                        "Comment_File" = "Profile Standard"
-                        "CloudAssignedRegion" = "os-default"
-                        "CloudAssignedAadServerData" = "{""ZeroTouchConfig"":{""CloudAssignedTenantUpn"":"""",""CloudAssignedTenantDomain"":""$tenantDomain"",""ForcedEnrollment"":1}}"
-                        "CloudAssignedForcedEnrollment" = 1
-                    }
+                    # Convert profile to JSON using ConvertTo-AutopilotConfigurationJSON function
+                    $profileConfigJson = $selectedProfile | ConvertTo-AutopilotConfigurationJSON
 
                     # Save configuration
-                    $profileConfig | ConvertTo-Json -Depth 10 |
-                        Out-File "$FileDestination\AutopilotConfigurationFile.json" -Encoding ascii -Force
+                    $profileConfigJson | Out-File "$FileDestination\AutopilotConfigurationFile.json" -Encoding ascii -Force
 
                     Write-Host "Autopilot profile saved: $($selectedProfile.displayName)" -ForegroundColor Green
                 }
@@ -105,5 +94,143 @@ function Get-AutopilotPolicy {
                 Remove-Module $_ -ErrorAction SilentlyContinue 3>$null
             }
         }
+    }
+}
+
+# Define Get-AutopilotProfile function
+function Get-AutopilotProfile {
+    [cmdletbinding()]
+    param (
+        [Parameter(Mandatory = $false)] $id
+    )
+
+    $graphApiVersion = "beta"
+    $Resource = "deviceManagement/windowsAutopilotDeploymentProfiles"
+
+    if ($id) {
+        $uri = "https://graph.microsoft.com/$graphApiVersion/$Resource/$id"
+    }
+    else {
+        $uri = "https://graph.microsoft.com/$graphApiVersion/$Resource"
+    }
+
+    Write-Verbose "GET $uri"
+
+    try {
+        $response = Invoke-MgGraphRequest -Uri $uri -Method Get
+        if ($id) {
+            $response
+        }
+        else {
+            $devices = $response.value
+
+            $devicesNextLink = $response."@odata.nextLink"
+
+            while ($null -ne $devicesNextLink) {
+                $devicesResponse = (Invoke-MgGraphRequest -Uri $devicesNextLink -Method Get)
+                $devicesNextLink = $devicesResponse."@odata.nextLink"
+                $devices += $devicesResponse.value
+            }
+
+            $devices
+        }
+    }
+    catch {
+        Write-Error $_.Exception
+        break
+    }
+}
+
+# Define ConvertTo-AutopilotConfigurationJSON function
+function ConvertTo-AutopilotConfigurationJSON {
+    [cmdletbinding()]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $True)]
+        [Object] $profile
+    )
+
+    Begin {
+        $script:TenantOrg = Get-MgOrganization
+        $script:allDomains = Get-MgDomain -All
+        foreach ($domain in $script:allDomains) {
+            if ($domain.isDefault) {
+                $script:TenantDomain = $domain.Id
+            }
+        }
+    }
+
+    Process {
+        $oobeSetting = $profile.outOfBoxExperienceSetting
+
+        $json = @{
+            "Comment_File" = "Profile $($_.displayName)"
+            "Version" = 2049
+            "ZtdCorrelationId" = $_.id
+        }
+
+        if ($profile."@odata.type" -eq "#microsoft.graph.activeDirectoryWindowsAutopilotDeploymentProfile") {
+            $json.Add("CloudAssignedDomainJoinMethod", 1)
+        }
+        else {
+            $json.Add("CloudAssignedDomainJoinMethod", 0)
+        }
+
+        if ($profile.deviceNameTemplate) {
+            $json.Add("CloudAssignedDeviceName", $_.deviceNameTemplate)
+        }
+
+        $oobeConfig = 8 + 256
+        if ($oobeSetting.userType -eq 'standard') {
+            $oobeConfig += 2
+        }
+        if ($oobeSetting.privacySettingsHidden -eq $true) {
+            $oobeConfig += 4
+        }
+        if ($oobeSetting.eulaHidden -eq $true) {
+            $oobeConfig += 16
+        }
+        if ($oobeSetting.keyboardSelectionPageSkipped -eq $true) {
+            $oobeConfig += 1024
+        }
+        if ($_.locale) {
+            $json.Add("CloudAssignedLanguage", $_.locale)
+        }
+        if ($oobeSetting.deviceUsageType -eq 'shared') {
+            $oobeConfig += 32 + 64
+        }
+        $json.Add("CloudAssignedOobeConfig", $oobeConfig)
+
+        if ($oobeSetting.escapeLinkHidden -eq $true) {
+            $json.Add("CloudAssignedForcedEnrollment", 1)
+        }
+        else {
+            $json.Add("CloudAssignedForcedEnrollment", 0)
+        }
+
+        $json.Add("CloudAssignedTenantId", $script:TenantOrg.id)
+        $json.Add("CloudAssignedTenantDomain", $script:TenantDomain)
+        $embedded = @{
+            "CloudAssignedTenantDomain" = $script:TenantDomain
+            "CloudAssignedTenantUpn" = ""
+        }
+        if ($oobeSetting.escapeLinkHidden -eq $true) {
+            $embedded.Add("ForcedEnrollment", 1)
+        }
+        else {
+            $embedded.Add("ForcedEnrollment", 0)
+        }
+        $ztc = @{
+            "ZeroTouchConfig" = $embedded
+        }
+        $json.Add("CloudAssignedAadServerData", (ConvertTo-JSON $ztc -Compress))
+
+        if ($profile.hybridAzureADJoinSkipConnectivityCheck -eq $true) {
+            $json.Add("HybridJoinSkipDCConnectivityCheck", 1)
+        }
+
+        $json.Add("CloudAssignedAutopilotUpdateDisabled", 1)
+        $json.Add("CloudAssignedAutopilotUpdateTimeout", 1800000)
+
+        ConvertTo-JSON $json
     }
 }
