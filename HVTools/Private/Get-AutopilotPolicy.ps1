@@ -37,8 +37,15 @@ function Get-AutopilotPolicy {
                 )
             }
 
-            # Get Autopilot deployment profiles
-            $autopilotProfiles = Get-MgDeviceManagementWindowsAutopilotDeploymentProfile
+            try {
+                $uri = "https://graph.microsoft.com/beta/deviceManagement/windowsAutopilotDeploymentProfiles"
+                $response = Invoke-MgGraphRequest -Method GET -Uri $uri -ErrorAction Stop
+                $autopilotProfiles = $response.value
+            }
+            catch {
+                Write-Error "Failed to get Autopilot profiles: $_"
+                return
+            }
 
             if (!($autopilotProfiles)) {
                 Write-Warning "No Autopilot policies found.."
@@ -46,7 +53,7 @@ function Get-AutopilotPolicy {
             else {
                 if ($autopilotProfiles.Count -gt 1) {
                     Write-Host "Multiple Autopilot policies found - select the correct one.." -ForegroundColor Cyan
-                    $selectedProfile = $autopilotProfiles | Select-Object DisplayName, Id, Description |
+                    $selectedProfile = $autopilotProfiles | Select-Object displayName, id, description |
                         Out-GridView -Title 'Select AutoPilot Profile' -PassThru
                 }
                 else {
@@ -55,32 +62,33 @@ function Get-AutopilotPolicy {
                 }
 
                 if ($selectedProfile) {
-                    # Get detailed profile configuration
+                    $context = Get-MgContext
+                    $tenantId = $context.TenantId
+                    $tenantDomain = $context.Account -replace '.*@'
+
+                    # Create profile configuration matching exact format
                     $profileConfig = @{
-                        "CloudAssignedTenantId" = (Get-MgContext).TenantId
-                        "CloudAssignedDeviceNameTemplate" = $selectedProfile.DeviceNameTemplate
+                        "CloudAssignedOobeConfig" = 1308
+                        "ZtdCorrelationId" = [guid]::NewGuid().ToString()
+                        "CloudAssignedDeviceName" = "%SERIAL%"
                         "Version" = 2049
+                        "CloudAssignedTenantDomain" = $tenantDomain
+                        "CloudAssignedLanguage" = "os-default"
+                        "CloudAssignedTenantId" = $tenantId
+                        "CloudAssignedAutopilotUpdateDisabled" = 1
                         "CloudAssignedAutopilotUpdateTimeout" = 1800000
-                        "CloudAssignedLanguage" = $selectedProfile.Language
-                        "CloudAssignedOobeSettings" = @{
-                            "SkipKeyboard" = $true
-                            "SkipTimeZone" = $true
-                            "SkipConnectivityCheck" = $false
-                            "SkipUserAuthentication" = $false
-                        }
-                        "CloudAssignedEnrollmentType" = switch ($selectedProfile.DeviceJoinType) {
-                            "azureADJoined" { 0 }
-                            "azureADJoinedWithAutopilot" { 1 }
-                            default { 0 }
-                        }
-                        "CloudAssignedAutopilotUpdateDisabled" = -not $selectedProfile.EnableAutopilotUpdateOnFirstLogin
+                        "CloudAssignedDomainJoinMethod" = 0
+                        "Comment_File" = "Profile Standard"
+                        "CloudAssignedRegion" = "os-default"
+                        "CloudAssignedAadServerData" = "{""ZeroTouchConfig"":{""CloudAssignedTenantUpn"":"""",""CloudAssignedTenantDomain"":""$tenantDomain"",""ForcedEnrollment"":1}}"
+                        "CloudAssignedForcedEnrollment" = 1
                     }
 
                     # Save configuration
                     $profileConfig | ConvertTo-Json -Depth 10 |
                         Out-File "$FileDestination\AutopilotConfigurationFile.json" -Encoding ascii -Force
 
-                    Write-Host "Autopilot profile saved: $($selectedProfile.DisplayName)" -ForegroundColor Green
+                    Write-Host "Autopilot profile saved: $($selectedProfile.displayName)" -ForegroundColor Green
                 }
             }
         }
