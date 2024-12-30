@@ -1,0 +1,11 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Load HVTools Module",
+            "type": "shell",
+            "command": "Import-Module ${workspaceFolder}/HVTools/HVTools.psm1 -force",
+            "problemMatcher": []
+        }
+    ]
+}

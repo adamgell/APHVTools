@@ -23,18 +23,29 @@ function New-ClientVM {
         [switch]$SkipAutoPilot
     )
     try {
+        Write-Verbose "Starting New-ClientVM function..."
+
         #region Config
+        Write-Verbose "Entering Config region..."
         #pre-load HV module..
+        Write-Verbose "Loading Hyper-V module..."
         Get-Command -Module 'Hyper-V' | Out-Null
+        Write-Verbose "Getting client details for tenant: $TenantName"
         $clientDetails = $script:hvConfig.tenantConfig | Where-Object { $_.TenantName -eq $TenantName }
+        Write-Verbose "Client details found: $($null -ne $clientDetails)"
+
+        Write-Verbose "Getting image details..."
         if ($OSBuild) {
+            Write-Verbose "Looking for OSBuild: $OSBuild"
             $imageDetails = $script:hvConfig.images | Where-Object { $_.imageName -eq $OSBuild }
         }
         else {
+            Write-Verbose "Using client default image: $($clientDetails.imageName)"
             $imageDetails = $script:hvConfig.images | Where-Object { $_.imageName -eq $clientDetails.imageName }
         }
+        Write-Verbose "Image details found: $($null -ne $imageDetails)"
         $clientPath = "$($script:hvConfig.vmPath)\$($TenantName)"
-        if($imageDetails.refimagePath -like '*wks$($ImageName)ref.vhdx'){
+        if ($imageDetails.refimagePath -like '*wks$($ImageName)ref.vhdx') {
             if (!(Test-Path $imageDetails.imagePath -ErrorAction SilentlyContinue)) {
                 throw "Installation media not found at location: $($imageDetails.imagePath)"
             }
@@ -59,42 +70,77 @@ function New-ClientVM {
         }
         #endregion
         #region Get Autopilot policy
+        Write-Verbose "Entering Autopilot policy region..."
+        #region Get Autopilot policy
         if (!($SkipAutoPilot)) {
             Write-Host "Grabbing Autopilot config.." -ForegroundColor Yellow
-            Get-AutopilotPolicy -FileDestination "$clientPath"
+            Write-Verbose "Constructing full AutopilotConfigurationFile path"
+            # Change this line - pass only the directory path
+            Get-AutopilotPolicy -FileDestination $clientPath
         }
         #endregion
+        Write-Verbose "Exiting Autopilot policy region..."
+        #endregion
+
         #region Build the client VMs
+        Write-Verbose "Entering VM Build region..."
         if (!(Test-Path -Path $clientPath -ErrorAction SilentlyContinue)) {
+            Write-Verbose "Creating client path directory: $clientPath"
             New-Item -Path $clientPath -ItemType Directory -Force | Out-Null
         }
+
+        Write-Verbose "Building vmParams hashtable..."
         $vmParams = @{
             ClientPath  = $clientPath
             RefVHDX     = $imageDetails.refImagePath
             VSwitchName = $script:hvConfig.vSwitchName
             CPUCount    = $CPUsPerVM
-            VMMMemory   = $VMMemory
+            VMMemory    = $VMMemory
         }
-        if ($SkipAutoPilot) {
-            $vmParams.skipAutoPilot = $true
+
+        Write-Verbose "Created vmParams with values:"
+        $vmParams.GetEnumerator() | ForEach-Object {
+            Write-Verbose "  $($_.Key): $($_.Value)"
         }
-        if ($script:hvConfig.vLanId) {
-            $vmParams.VLanId = $script:hvConfig.vLanId
-        }
+
+        Write-Verbose "Processing $NumberOfVMs VM(s)..."
         if ($numberOfVMs -eq 1) {
-            $max = ((Get-VM -Name "$TenantName*").name -replace "\D" | Measure-Object -Maximum | Select-Object -ExpandProperty Maximum) + 1
+            Write-Verbose "Single VM mode..."
+            $max = ((Get-VM -Name "$TenantName*").name -replace "\D" | Measure-Object -Maximum | Select-Object -ExpandProperty Maximum)
+            Write-Verbose "Current max VM number: $max"
+            if ($null -eq $max) {
+                Write-Verbose "No existing VMs found, starting at 0"
+                $max = 0
+            }
+            $max += 1
             $vmParams.VMName = "$($TenantName)_$max"
+            Write-Verbose "Generated VMName: $($vmParams.VMName)"
             Write-Host "Creating VM: $($vmParams.VMName).." -ForegroundColor Yellow
-            New-ClientDevice @vmParams
+            Write-Verbose "Calling New-ClientDevice with parameters:"
+            $vmParams.GetEnumerator() | ForEach-Object {
+                Write-Verbose "  $($_.Key): $($_.Value)"
+            }
+            New-ClientDevice @vmParams -Verbose
         }
         else {
-            (1..$NumberOfVMs) | ForEach-Object {
-                $max = ((Get-VM -Name "$TenantName*").name -replace "\D" | Measure-Object -Maximum | Select-Object -ExpandProperty Maximum) + 1
+            Write-Verbose "Multiple VM mode..."
+            1..$NumberOfVMs | ForEach-Object {
+                $currentVM = $_
+                Write-Verbose "Processing VM $currentVM of $NumberOfVMs"
+                $max = ((Get-VM -Name "$TenantName*").name -replace "\D" | Measure-Object -Maximum | Select-Object -ExpandProperty Maximum)
+                if ($null -eq $max) { $max = 0 }
+                $max += 1
                 $vmParams.VMName = "$($TenantName)_$max"
+                Write-Verbose "Generated VMName: $($vmParams.VMName)"
                 Write-Host "Creating VM: $($vmParams.VMName).." -ForegroundColor Yellow
-                New-ClientDevice @vmParams
+                Write-Verbose "Calling New-ClientDevice with parameters:"
+                $vmParams.GetEnumerator() | ForEach-Object {
+                    Write-Verbose "  $($_.Key): $($_.Value)"
+                }
+                New-ClientDevice @vmParams -Verbose
             }
         }
+        Write-Verbose "VM creation completed"
         #endregion
     }
     catch {

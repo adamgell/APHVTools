@@ -1,10 +1,10 @@
 # Updated Get-AutopilotPolicy.ps1
 
 $requiredModules = @(
-    @{ModuleName="Microsoft.Graph.Authentication"; MinimumVersion="2.25.0"},
-    @{ModuleName="Microsoft.Graph.DeviceManagement"; MinimumVersion="2.25.0"},
-    @{ModuleName="Microsoft.Graph.DeviceManagement.Enrollment"; MinimumVersion="2.25.0"},
-    @{ModuleName="Microsoft.Graph.Identity.DirectoryManagement"; MinimumVersion="2.11.1"}
+    @{ModuleName = "Microsoft.Graph.Authentication"; MinimumVersion = "2.25.0" },
+    @{ModuleName = "Microsoft.Graph.DeviceManagement"; MinimumVersion = "2.25.0" },
+    @{ModuleName = "Microsoft.Graph.DeviceManagement.Enrollment"; MinimumVersion = "2.25.0" },
+    @{ModuleName = "Microsoft.Graph.Identity.DirectoryManagement"; MinimumVersion = "2.11.1" }
 )
 
 foreach ($module in $requiredModules) {
@@ -22,81 +22,67 @@ function Get-AutopilotPolicy {
     [cmdletbinding()]
     param (
         [parameter(Mandatory = $true)]
-        [System.IO.FileInfo]$FileDestination
+        [string]$FileDestination
     )
     try {
-        if (!(Test-Path "$FileDestination\AutopilotConfigurationFile.json" -ErrorAction SilentlyContinue)) {
-            $modules = @(
-                "Microsoft.Graph.Authentication",
-                "Microsoft.Graph.DeviceManagement",
-                "Microsoft.Graph.DeviceManagement.Enrollment",
-                "Microsoft.Graph.Identity.DirectoryManagement"
-            )
+        # Connect to Microsoft Graph with all required permissions
+        Write-Verbose "Connecting to Microsoft Graph..."
+        Connect-MgGraph -Scopes @(
+            "DeviceManagementServiceConfig.Read.All",
+            "DeviceManagementConfiguration.Read.All",
+            "Organization.Read.All",
+            "Domain.Read.All"
+        ) -NoWelcome
 
-            # Import modules properly for PowerShell 7 compatibility
-            if ($PSVersionTable.PSVersion.Major -eq 7) {
-                $modules | ForEach-Object {
-                    Import-Module $_ -UseWindowsPowerShell -ErrorAction SilentlyContinue -Force 3>$null
-                }
-            }
-            else {
-                $modules | ForEach-Object {
-                    Import-Module $_ -Force
-                }
-            }
+        $configFile = "AutopilotConfigurationFile.json"
+        $configPath = Join-Path $FileDestination $configFile
+        Write-Verbose "Config file path: $configPath"
 
-            # Connect to Microsoft Graph with proper scopes
-            if (-not (Get-MgContext)) {
-                Connect-MgGraph -Scopes @(
-                    "DeviceManagementServiceConfig.Read.All",
-                    "DeviceManagementConfiguration.Read.All"
-                )
+        if (!(Test-Path $configPath -ErrorAction Continue)) {
+            # Ensure directory exists
+            if (!(Test-Path $FileDestination)) {
+                New-Item -Path $FileDestination -ItemType Directory -Force | Out-Null
             }
 
-            # Get Autopilot profiles using Get-AutopilotProfile function
+            Write-Verbose "Getting Autopilot profiles..."
             $autopilotProfiles = Get-AutopilotProfile
+            Write-Verbose "Found $($autopilotProfiles.Count) profiles"
 
             if (!($autopilotProfiles)) {
                 Write-Warning "No Autopilot policies found.."
             }
             else {
                 if ($autopilotProfiles.Count -gt 1) {
-                    Write-Host "Multiple Autopilot policies found - select the correct one.." -ForegroundColor Cyan
+                    Write-Verbose "Multiple profiles found, showing selection dialog..."
                     $selectedProfile = $autopilotProfiles | Select-Object displayName, id, description |
                         Out-GridView -Title 'Select AutoPilot Profile' -PassThru
                 }
                 else {
-                    Write-Host "Policy found - saving to $FileDestination.." -ForegroundColor Cyan
+                    Write-Verbose "Single profile found, using automatically"
                     $selectedProfile = $autopilotProfiles[0]
                 }
 
                 if ($selectedProfile) {
-                    # Convert profile to JSON using ConvertTo-AutopilotConfigurationJSON function
+                    Write-Verbose "Converting profile to JSON config..."
                     $profileConfigJson = $selectedProfile | ConvertTo-AutopilotConfigurationJSON
-
-                    # Save configuration
-                    $profileConfigJson | Out-File "$FileDestination\AutopilotConfigurationFile.json" -Encoding ascii -Force
-
+                    Write-Verbose "Saving config to: $configPath"
+                    $profileConfigJson | Out-File $configPath -Encoding ascii -Force
                     Write-Host "Autopilot profile saved: $($selectedProfile.displayName)" -ForegroundColor Green
+                }
+                else {
+                    Write-Warning "No profile was selected"
                 }
             }
         }
         else {
-            Write-Host "Autopilot Configuration file found locally: $FileDestination\AutopilotConfigurationFile.json" -ForegroundColor Green
+            Write-Host "Autopilot Configuration file found locally: $configPath" -ForegroundColor Green
         }
     }
     catch {
         Write-Error "Error occurred getting Autopilot policy: $_"
-    }
-    finally {
-        if ($PSVersionTable.PSVersion.Major -eq 7) {
-            $modules | ForEach-Object {
-                Remove-Module $_ -ErrorAction SilentlyContinue 3>$null
-            }
-        }
+        throw
     }
 }
-
 # Define Get-AutopilotProfile function
 function Get-AutopilotProfile {
     [cmdletbinding()]
@@ -163,8 +149,8 @@ function ConvertTo-AutopilotConfigurationJSON {
         $oobeSetting = $profile.outOfBoxExperienceSetting
 
         $json = @{
-            "Comment_File" = "Profile $($_.displayName)"
-            "Version" = 2049
+            "Comment_File"     = "Profile $($_.displayName)"
+            "Version"          = 2049
             "ZtdCorrelationId" = $_.id
         }
 
@@ -211,7 +197,7 @@ function ConvertTo-AutopilotConfigurationJSON {
         $json.Add("CloudAssignedTenantDomain", $script:TenantDomain)
         $embedded = @{
             "CloudAssignedTenantDomain" = $script:TenantDomain
-            "CloudAssignedTenantUpn" = ""
+            "CloudAssignedTenantUpn"    = ""
         }
         if ($oobeSetting.escapeLinkHidden -eq $true) {
             $embedded.Add("ForcedEnrollment", 1)

@@ -1,0 +1,27 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "PowerShell",
+            "request": "launch",
+            "name": "PowerShell Launch Script",
+            "script": "${workspaceFolder}/HVTools/Public/New-ClientVM.ps1",
+            "args": [
+                "-TenantName", "IvyNew",
+                "-NumberOfVMs", "3",
+                "-OSBuild", "Win11_24H2",
+                "-CPUsPerVM", "4",
+                "-VMMemory", "4GB"
+            ],
+            "preLaunchTask": "Load HVTools Module",
+            "createTemporaryIntegratedConsole": true,
+            // Remove the "PowerShellExePath" property
+            "cwd": "${workspaceFolder}",
+            "presentation": {
+                "hidden": false,
+                "group": "PowerShell",
+                "order": 1
+            }
+        }
+    ]
+}
