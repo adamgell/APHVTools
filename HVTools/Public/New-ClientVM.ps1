@@ -98,6 +98,10 @@ function New-ClientVM {
             VMMemory    = $VMMemory
         }
 
+        if ($SkipAutoPilot) {
+            $vmParams.Add('skipAutoPilot', $true)
+        }
+
         Write-Verbose "Created vmParams with values:"
         $vmParams.GetEnumerator() | ForEach-Object {
             Write-Verbose "  $($_.Key): $($_.Value)"
@@ -106,33 +110,31 @@ function New-ClientVM {
         Write-Verbose "Processing $NumberOfVMs VM(s)..."
         if ($numberOfVMs -eq 1) {
             Write-Verbose "Single VM mode..."
-            $max = ((Get-VM -Name "$TenantName*").name -replace "\D" | Measure-Object -Maximum | Select-Object -ExpandProperty Maximum)
-            Write-Verbose "Current max VM number: $max"
-            if ($null -eq $max) {
-                Write-Verbose "No existing VMs found, starting at 0"
-                $max = 0
+            
+            # Get existing VMs for this tenant with proper pattern matching
+            $existingVMs = Get-VM -Name "$TenantName*" -ErrorAction SilentlyContinue
+            
+            # Extract only the numeric suffixes using regex pattern
+            $pattern = "^$([regex]::Escape($TenantName))_(\d+)$"
+            $existingNumbers = @($existingVMs | ForEach-Object {
+                if ($_.Name -match $pattern) {
+                    [int]$matches[1]
+                }
+            })
+            
+            # Find the maximum number or start at 0
+            $max = 0
+            if ($existingNumbers.Count -gt 0) {
+                $max = ($existingNumbers | Measure-Object -Maximum).Maximum
             }
+            
             $max += 1
             $vmParams.VMName = "$($TenantName)_$max"
+            
             Write-Verbose "Generated VMName: $($vmParams.VMName)"
             Write-Host "Creating VM: $($vmParams.VMName).." -ForegroundColor Yellow
-            Write-Verbose "Calling New-ClientDevice with parameters:"
-            $vmParams.GetEnumerator() | ForEach-Object {
-                Write-Verbose "  $($_.Key): $($_.Value)"
-            }
-            New-ClientDevice @vmParams -Verbose
-        }
-        else {
-            Write-Verbose "Multiple VM mode..."
-            1..$NumberOfVMs | ForEach-Object {
-                $currentVM = $_
-                Write-Verbose "Processing VM $currentVM of $NumberOfVMs"
-                $max = ((Get-VM -Name "$TenantName*").name -replace "\D" | Measure-Object -Maximum | Select-Object -ExpandProperty Maximum)
-                if ($null -eq $max) { $max = 0 }
-                $max += 1
-                $vmParams.VMName = "$($TenantName)_$max"
-                Write-Verbose "Generated VMName: $($vmParams.VMName)"
-                Write-Host "Creating VM: $($vmParams.VMName).." -ForegroundColor Yellow
+            
+            if ($PSCmdlet.ShouldProcess($vmParams.VMName, "Create new VM")) {
                 Write-Verbose "Calling New-ClientDevice with parameters:"
                 $vmParams.GetEnumerator() | ForEach-Object {
                     Write-Verbose "  $($_.Key): $($_.Value)"
@@ -140,11 +142,49 @@ function New-ClientVM {
                 New-ClientDevice @vmParams -Verbose
             }
         }
+        else {
+            Write-Verbose "Multiple VM mode..."
+            
+            # Get all VMs in a single call for efficiency
+            $allExistingVMs = Get-VM -Name "$TenantName*" -ErrorAction SilentlyContinue
+            $pattern = "^$([regex]::Escape($TenantName))_(\d+)$"
+            
+            # Extract all existing numbers
+            $existingNumbers = @($allExistingVMs | ForEach-Object {
+                if ($_.Name -match $pattern) {
+                    [int]$matches[1]
+                }
+            })
+            
+            # Find the maximum number
+            $startNumber = 0
+            if ($existingNumbers.Count -gt 0) {
+                $startNumber = ($existingNumbers | Measure-Object -Maximum).Maximum
+            }
+            
+            # Create each VM with incremental numbering
+            for ($i = 1; $i -le [int]$NumberOfVMs; $i++) {
+                $vmNumber = $startNumber + $i
+                $vmParams.VMName = "$($TenantName)_$vmNumber"
+                
+                Write-Verbose "Generated VMName: $($vmParams.VMName)"
+                Write-Host "Creating VM: $($vmParams.VMName).." -ForegroundColor Yellow
+                
+                if ($PSCmdlet.ShouldProcess($vmParams.VMName, "Create new VM")) {
+                    Write-Verbose "Calling New-ClientDevice with parameters:"
+                    $vmParams.GetEnumerator() | ForEach-Object {
+                        Write-Verbose "  $($_.Key): $($_.Value)"
+                    }
+                    New-ClientDevice @vmParams -Verbose
+                }
+            }
+        }
         Write-Verbose "VM creation completed"
         #endregion
     }
     catch {
         $errorMsg = $_.Exception.Message
+        Write-Error "Error in New-ClientVM: $errorMsg"
     }
     finally {
         if ($errorMsg) {
