@@ -30,10 +30,10 @@
     Copyright         = '(c) 2020 Ben Reader. All rights reserved.'
 
     # Description of the functionality provided by this module
-    # Description = ''
+    Description       = 'Tools for automating Hyper-V client VM creation with Autopilot'
 
     # Minimum version of the Windows PowerShell engine required by this module
-    # PowerShellVersion = ''
+    PowerShellVersion = '5.1'
 
     # Name of the Windows PowerShell host required by this module
     # PowerShellHostName = ''
@@ -73,7 +73,14 @@
     # NestedModules = @()
 
     # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
-    FunctionsToExport = @()
+    FunctionsToExport = @(
+        'Initialize-HVTools',
+        'Get-HVToolsConfig',
+        'Add-ImageToConfig',
+        'Add-NetworkToConfig',
+        'Add-TenantToConfig',
+        'New-ClientVM'
+    )
 
     # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
     CmdletsToExport   = @()
@@ -99,15 +106,13 @@
         PSData = @{
 
             # Tags applied to this module. These help with module discovery in online galleries.
-            Tags = @("Intune", "Azure", "Automation","Hyper-V", "Virtualization")
+            Tags       = @("Intune", "Azure", "Automation","Hyper-V", "Virtualization")
 
             # A URL to the main website for this project.
-             ProjectUri = 'https://github.com/tabs-not-spaces/HVTools'
+            ProjectUri = 'https://github.com/tabs-not-spaces/HVTools'
 
         } # End of PSData hashtable
 
     } # End of PrivateData hashtable
 
 }
-
-

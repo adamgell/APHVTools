@@ -2,8 +2,10 @@ function New-ClientDevice {
     [cmdletBinding(SupportsShouldProcess)]
     param (
         [parameter(Position = 1, Mandatory = $true)]
+        [ValidatePattern('^[a-zA-Z0-9\-_]+$')]  # Validate VM name format
         [string]$VMName,
 
+        # Other parameters remain the same
         [parameter(Position = 2, Mandatory = $true)]
         [string]$ClientPath,
 
@@ -25,19 +27,30 @@ function New-ClientDevice {
         [parameter(Position = 8, Mandatory = $false)]
         [switch]$skipAutoPilot
     )
-    Copy-Item -path $RefVHDX -Destination "$ClientPath\$VMName.vhdx"
+    
+    # Sanitize VM name to ensure it's compatible with Hyper-V
+    $sanitizedVMName = $VMName -replace '[^\w\-]', '_'
+    
+    # Check if VM already exists
+    if (Get-VM -Name $sanitizedVMName -ErrorAction SilentlyContinue) {
+        Write-Error "A virtual machine with name '$sanitizedVMName' already exists."
+        return
+    }
+    
+    # Rest of your function with sanitized VM name
+    Copy-Item -Path $RefVHDX -Destination "$ClientPath\$sanitizedVMName.vhdx"
     if (!($skipAutoPilot)) {
-        Publish-AutoPilotConfig -vmName $VMName -clientPath $ClientPath
+        Publish-AutoPilotConfig -vmName $sanitizedVMName -clientPath $ClientPath
     }
 
-    New-VM -Name $VMName -MemoryStartupBytes $VMMemory -VHDPath "$ClientPath\$VMName.vhdx" -Generation 2 | Out-Null
-    Enable-VMIntegrationService -vmName $VMName -Name "Guest Service Interface"
-    Set-VM -name $VMName -CheckpointType Disabled
-    Set-VMProcessor -VMName $VMName -Count $CPUCount
-    Set-VMFirmware -VMName $VMName -EnableSecureBoot On
-    Get-VMNetworkAdapter -vmName $VMName | Connect-VMNetworkAdapter -SwitchName $VSwitchName | Set-VMNetworkAdapter -Name $VSwitchName -DeviceNaming On
+    New-VM -Name $sanitizedVMName -MemoryStartupBytes $VMMemory -VHDPath "$ClientPath\$sanitizedVMName.vhdx" -Generation 2 | Out-Null
+    Enable-VMIntegrationService -vmName $sanitizedVMName -Name "Guest Service Interface"
+    Set-VM -name $sanitizedVMName -CheckpointType Disabled
+    Set-VMProcessor -VMName $sanitizedVMName -Count $CPUCount
+    Set-VMFirmware -VMName $sanitizedVMName -EnableSecureBoot On
+    Get-VMNetworkAdapter -vmName $sanitizedVMName | Connect-VMNetworkAdapter -SwitchName $VSwitchName | Set-VMNetworkAdapter -Name $VSwitchName -DeviceNaming On
     if ($VLanId) {
-        Set-VMNetworkAdapterVlan -Access -VMName $VMName -VlanId $VLanId
+        Set-VMNetworkAdapterVlan -Access -VMName $sanitizedVMName -VlanId $VLanId
     }
     $owner = Get-HgsGuardian UntrustedGuardian -ErrorAction SilentlyContinue
     If (!$owner) {
@@ -45,10 +58,14 @@ function New-ClientDevice {
         $owner = New-HgsGuardian -Name UntrustedGuardian -GenerateCertificates
     }
     $kp = New-HgsKeyProtector -Owner $owner -AllowUntrustedRoot
-    Set-VMKeyProtector -VMName $VMName -KeyProtector $kp.RawData
-    Enable-VMTPM -VMName $VMName
-    Start-VM -Name $VMName
-    #Set VM Info with Serial number
-    $vmSerial = (Get-CimInstance -Namespace root\virtualization\v2 -class Msvm_VirtualSystemSettingData | Where-Object { ($_.VirtualSystemType -eq "Microsoft:Hyper-V:System:Realized") -and ($_.elementname -eq $VMName ) }).BIOSSerialNumber
-    Get-VM -Name $VMname | Set-VM -Notes "Serial# $vmSerial"
+    Set-VMKeyProtector -VMName $sanitizedVMName -KeyProtector $kp.RawData
+    Enable-VMTPM -VMName $sanitizedVMName
+    Start-VM -Name $sanitizedVMName
+    
+    # Set VM Info with Serial number
+    $vmSerial = (Get-CimInstance -Namespace root\virtualization\v2 -class Msvm_VirtualSystemSettingData | 
+                Where-Object { ($_.VirtualSystemType -eq "Microsoft:Hyper-V:System:Realized") -and 
+                              ($_.elementname -eq $sanitizedVMName) }).BIOSSerialNumber
+    
+    Get-VM -Name $sanitizedVMName | Set-VM -Notes "Serial# $vmSerial | Tenant: $VMName"
 }
