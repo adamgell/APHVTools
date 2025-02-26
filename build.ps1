@@ -15,18 +15,6 @@ try {
         $moduleName = Split-Path $modulePath -Leaf
     }
 
-    if ($buildLocal) {
-        [int32]$env:BUILD_BUILDID = 420
-        if (Test-Path $PSScriptRoot\localenv.ps1 -ErrorAction SilentlyContinue) {
-            . $PSScriptRoot\localenv.ps1
-        }
-        if (Test-Path "$PSScriptRoot\bin\release\*") {
-            [int32]$env:BUILD_BUILDID = ((Get-ChildItem $PSScriptRoot\bin\release\).Name |
-                Measure-Object -Maximum |
-                Select-Object -ExpandProperty Maximum) + 1
-        }
-    }
-
     # Define required modules upfront
     $RequiredModules = @(
         @{
@@ -44,15 +32,66 @@ try {
         @{
             ModuleName = "Hyper-ConvertImage"
             ModuleVersion = "10.2"
+        },
+        @{
+            ModuleName = "WindowsAutoPilotIntune"
+            ModuleVersion = "4.3"
+        },
+        @{
+            ModuleName = "Microsoft.Graph.Intune"
+            ModuleVersion = "6.1907.1.0"
         }
     )
 
     #region Generate a new version number
-    $newVersion = New-Object version -ArgumentList 1, 0, 0, $env:BUILD_BUILDID
+    # Base version components
+    $majorVersion = 0
+    $minorVersion = 0
+    $patchVersion = 1
+
+    # Determine build number
+    if ($buildLocal) {
+        # Check if there's an existing module manifest in the module path
+        $manifestPath = Join-Path -Path $modulePath -ChildPath "$moduleName.psd1"
+        if (Test-Path $manifestPath) {
+            $existingModule = Import-PowerShellDataFile -Path $manifestPath
+            $existingVersion = [version]$existingModule.ModuleVersion
+
+            # Keep major/minor/patch from existing version if greater than our base
+            if ($existingVersion.Major -gt $majorVersion) {
+                $majorVersion = $existingVersion.Major
+                $minorVersion = $existingVersion.Minor
+                $patchVersion = $existingVersion.Build
+            }
+            elseif ($existingVersion.Major -eq $majorVersion -and $existingVersion.Minor -gt $minorVersion) {
+                $minorVersion = $existingVersion.Minor
+                $patchVersion = $existingVersion.Build
+            }
+            elseif ($existingVersion.Major -eq $majorVersion -and $existingVersion.Minor -eq $minorVersion -and $existingVersion.Build -gt $patchVersion) {
+                $patchVersion = $existingVersion.Build
+            }
+
+            # Always increment patch version for a new build
+            $patchVersion++
+        }
+
+        # Set build ID to 0 for development builds
+        $buildId = 0
+    }
+    else {
+        # For CI/CD, use the BUILD_BUILDID env variable if available, otherwise use 0
+        $buildId = if ($env:BUILD_BUILDID) { [int]$env:BUILD_BUILDID } else { 0 }
+    }
+
+    # Create the new version
+    $newVersion = New-Object version -ArgumentList $majorVersion, $minorVersion, $patchVersion, $buildId
     #endregion
 
     #region Build out the release
-    $relPath = "$PSScriptRoot\bin\release\$env:BUILD_BUILDID\$moduleName"
+    # Use the version number as the folder name (without the build ID)
+    $versionStr = "$majorVersion.$minorVersion.$patchVersion"
+    $relPath = "$PSScriptRoot\bin\release\$versionStr\$moduleName"
+
     Write-Host "Version is $newVersion" -ForegroundColor Cyan
     Write-Host "Source Path is $modulePath" -ForegroundColor Cyan
     Write-Host "Module Name is $moduleName" -ForegroundColor Cyan
@@ -139,7 +178,17 @@ try {
             -Tags @("Intune", "Azure", "Automation", "Hyper-V", "Virtualization")
     }
 
-    $releaseNotes = (git log --oneline --decorate -- "$modulePath/*.*") -join "`n"
+    # Get release notes from git if possible
+    $releaseNotes = ""
+    try {
+        $releaseNotes = (git log --oneline --decorate -- "$modulePath/*.*" -n 10) -join "`n"
+        if ([string]::IsNullOrEmpty($releaseNotes)) {
+            $releaseNotes = "Version $newVersion"
+        }
+    }
+    catch {
+        $releaseNotes = "Version $newVersion"
+    }
 
     Write-Host "Updating module manifest" -ForegroundColor Cyan
 
@@ -149,8 +198,8 @@ try {
         -RootModule "$moduleName.psm1" `
         -ModuleVersion $newVersion `
         -Description $description `
-        -Author "Ben Reader" `
-        -CompanyName "Powers-Hell" `
+        -Author "Adam Gell" `
+        -CompanyName "None" `
         -RequiredModules $RequiredModules `
         -FunctionsToExport $functions `
         -ReleaseNotes $releaseNotes `
@@ -164,22 +213,48 @@ try {
     #endregion
 
     #region Generate the nuspec manifest
-    $t = [xml](Get-Content $PSScriptRoot\module.nuspec -Raw)
-    $t.package.metadata.id = $moduleName
-    $t.package.metadata.version = $newVersion.ToString()
-    $t.package.metadata.authors = $moduleManifest.author.ToString()
-    $t.package.metadata.owners = $moduleManifest.author.ToString()
-    $t.package.metadata.requireLicenseAcceptance = "false"
-    $t.package.metadata.description = $description
-    $t.package.metadata.releaseNotes = $releaseNotes
-    $t.package.metadata.copyright = $moduleManifest.copyright.ToString()
-    $t.package.metadata.tags = ($moduleManifest.PrivateData.PSData.Tags -join ',').ToString()
+    if (Test-Path "$PSScriptRoot\module.nuspec") {
+        Write-Host "`nUpdating NuSpec file..." -ForegroundColor Cyan
+        $t = [xml](Get-Content "$PSScriptRoot\module.nuspec" -Raw)
+        $t.package.metadata.id = $moduleName
+        $t.package.metadata.version = $newVersion.ToString()
+        $t.package.metadata.authors = $moduleManifest.author.ToString()
+        $t.package.metadata.owners = $moduleManifest.author.ToString()
+        $t.package.metadata.requireLicenseAcceptance = "false"
+        $t.package.metadata.description = $description
+        $t.package.metadata.releaseNotes = $releaseNotes
+        $t.package.metadata.copyright = $moduleManifest.copyright.ToString()
+        $t.package.metadata.tags = ($moduleManifest.PrivateData.PSData.Tags -join ',').ToString()
 
-    $t.Save("$PSScriptRoot\$moduleName.nuspec")
+        $t.Save("$PSScriptRoot\$moduleName.nuspec")
+        Write-Host "NuSpec file created: $PSScriptRoot\$moduleName.nuspec" -ForegroundColor Green
+    }
+    else {
+        Write-Host "`nCreating new NuSpec file..." -ForegroundColor Cyan
+        $nuspecContent = @"
+<?xml version="1.0"?>
+<package>
+  <metadata>
+    <id>$moduleName</id>
+    <version>$($newVersion.ToString())</version>
+    <authors>$($moduleManifest.author.ToString())</authors>
+    <owners>$($moduleManifest.author.ToString())</owners>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>$description</description>
+    <releaseNotes>$releaseNotes</releaseNotes>
+    <copyright>$($moduleManifest.copyright.ToString())</copyright>
+    <tags>$($moduleManifest.PrivateData.PSData.Tags -join ',')</tags>
+  </metadata>
+</package>
+"@
+        Set-Content -Path "$PSScriptRoot\$moduleName.nuspec" -Value $nuspecContent
+        Write-Host "NuSpec file created: $PSScriptRoot\$moduleName.nuspec" -ForegroundColor Green
+    }
     #endregion
 
     Write-Host "`nBuild completed successfully!" -ForegroundColor Green
     Write-Host "Module built at: $relPath" -ForegroundColor Green
+    Write-Host "Version: $newVersion" -ForegroundColor Green
     Write-Host "Total public functions: $($functions.Count)" -ForegroundColor Green
 
     # Verify final structure

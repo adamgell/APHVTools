@@ -12,19 +12,19 @@
     RootModule        = 'HVTools.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '1.1'  # Updated version number
+    ModuleVersion     = '0.0.1'  # Updated version number
 
     # Supported PSEditions
     # CompatiblePSEditions = @()
 
     # ID used to uniquely identify this module
-    GUID              = 'f9f59767-cb8d-4532-8710-52ab326241ff'
+    GUID              = 'afa0ac68-0503-453b-a8ab-8db58f6d146e'
 
     # Author of this module
-    Author            = 'Ben Reader'
+    Author            = 'Adam Gell'
 
     # Company or vendor of this module
-    CompanyName       = 'Powers-Hell'
+    CompanyName       = ''
 
     # Copyright statement for this module
     Copyright         = '(c) 2020 Ben Reader. All rights reserved.'
