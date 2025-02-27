@@ -201,8 +201,8 @@ try {
         -RootModule "$moduleName.psm1" `
         -ModuleVersion $newVersion `
         -Description $description `
-        -Author "Ben Reader" `
-        -CompanyName "Powers-Hell" `
+        -Author 'Adam Gell'`
+        -CompanyName "None" `
         -RequiredModules $RequiredModules `
         -FunctionsToExport $functions `
         -ReleaseNotes $releaseNotes `
