@@ -64,7 +64,7 @@ function Add-TroubleshootingTools {
             }
 
             # Create shortcuts on the desktop
-            $desktopPath = "$disk`:\Users\Public\Desktop"
+            $desktopPath = "C:\Users\Public\Desktop"
             if (Test-Path $desktopPath) {
                 # Create folder shortcut
                 $wshShell = New-Object -ComObject WScript.Shell
