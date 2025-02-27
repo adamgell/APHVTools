@@ -23,8 +23,7 @@ function Add-TroubleshootingTools {
 
         # Define paths
         $vhdxPath = "$ClientPath\$VMName.vhdx"
-        $toolsSourcePath = "$PSScriptRoot\..\..\Tools"
-
+        $toolsSourcePath = Join-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -ChildPath "Tools"
         # Validate source path exists
         if (!(Test-Path -Path $toolsSourcePath)) {
             Write-Warning "Tools source directory not found at $toolsSourcePath. Creating directory..."
