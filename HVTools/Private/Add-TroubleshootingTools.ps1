@@ -69,6 +69,15 @@ function Add-TroubleshootingTools {
                 # Create folder shortcut
                 $wshShell = New-Object -ComObject WScript.Shell
                 $shortcut = $wshShell.CreateShortcut("$desktopPath\Troubleshooting Tools.lnk")
+                $iconSourcePath = Join-Path -Path $toolsSourcePath -ChildPath "troubleshootingtools_IMK_icon.ico"
+                $iconDestinationPath = "$vmToolsFolder\troubleshootingtools_IMK_icon.ico"
+                if (Test-Path $iconSourcePath) {
+                    Copy-Item -Path $iconSourcePath -Destination $iconDestinationPath -Force
+                    Write-Verbose "Copied troubleshootingtools_IMK_icon.ico to VM"
+                } else {
+                    Write-Warning "Icon file troubleshootingtools_IMK_icon.ico not found in $toolsSourcePath"
+                }
+                $shortcut.IconLocation = $iconDestinationPath
                 $shortcut.TargetPath = "$vmToolsFolder"
                 $shortcut.Save()
                 Write-Verbose "Created desktop shortcut to tools folder"
