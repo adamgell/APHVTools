@@ -179,12 +179,19 @@ function New-ClientVM {
                     $vmSerial = (Get-CimInstance -Namespace root\virtualization\v2 -class Msvm_VirtualSystemSettingData |
                         Where-Object { ($_.VirtualSystemType -eq "Microsoft:Hyper-V:System:Realized") -and
                                          ($_.elementname -eq $tempVMName) }).BIOSSerialNumber
-                } else {
+                }
+                else {
                     # In WhatIf mode, use a placeholder serial
                     $vmSerial = "1268-0649-6308-2683-1866-1606-61"
                 }
 
                 # Generate the VM name based on the CloudAssignedDeviceName template
+                $vmName = $script:deviceNameTemplate -replace '%SERIAL%', $vmSerial
+
+
+                #strip out hyphens from serial number
+                $vmSerial = $vmSerial -replace '-', ''
+                Write-Verbose "Serial number for VM: $vmSerial"
                 $vmName = $script:deviceNameTemplate -replace '%SERIAL%', $vmSerial
 
                 # Truncate to 15 characters to match Autopilot behavior
@@ -264,7 +271,8 @@ function New-ClientVM {
                         $vmSerial = (Get-CimInstance -Namespace root\virtualization\v2 -class Msvm_VirtualSystemSettingData |
                             Where-Object { ($_.VirtualSystemType -eq "Microsoft:Hyper-V:System:Realized") -and
                                              ($_.elementname -eq $vmParams.VMName) }).BIOSSerialNumber
-                    } else {
+                    }
+                    else {
                         # In WhatIf mode, use a placeholder serial
                         $vmSerial = "1268-0649-6308-2683-1866-1606-61"
                     }
@@ -346,13 +354,15 @@ function New-ClientVM {
                         $vmSerial = (Get-CimInstance -Namespace root\virtualization\v2 -class Msvm_VirtualSystemSettingData |
                             Where-Object { ($_.VirtualSystemType -eq "Microsoft:Hyper-V:System:Realized") -and
                                              ($_.elementname -eq $tempVMName) }).BIOSSerialNumber
-                    } else {
+                    }
+                    else {
                         # In WhatIf mode, use a placeholder serial with counter
                         $vmSerial = "1268-0649-6308-2683-1866-1606-$vmNumber"
                     }
 
                     # Generate the VM name based on the CloudAssignedDeviceName template
-                    #strip out hyphens from serial number
+                    # Strip out hyphens from serial number
+
                     $vmSerial = $vmSerial -replace '-', ''
                     Write-Verbose "Serial number for VM: $vmSerial"
                     $vmName = $script:deviceNameTemplate -replace '%SERIAL%', $vmSerial
@@ -434,7 +444,8 @@ function New-ClientVM {
                             $vmSerial = (Get-CimInstance -Namespace root\virtualization\v2 -class Msvm_VirtualSystemSettingData |
                                 Where-Object { ($_.VirtualSystemType -eq "Microsoft:Hyper-V:System:Realized") -and
                                                  ($_.elementname -eq $vmParams.VMName) }).BIOSSerialNumber
-                        } else {
+                        }
+                        else {
                             # In WhatIf mode, use a placeholder serial with counter
                             $vmSerial = "1268-0649-6308-2683-1866-1606-$vmNumber"
                         }
