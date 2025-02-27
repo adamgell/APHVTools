@@ -352,6 +352,9 @@ function New-ClientVM {
                     }
 
                     # Generate the VM name based on the CloudAssignedDeviceName template
+                    #strip out hyphens from serial number
+                    $vmSerial = $vmSerial -replace '-', ''
+                    Write-Verbose "Serial number for VM: $vmSerial"
                     $vmName = $script:deviceNameTemplate -replace '%SERIAL%', $vmSerial
 
                     # Truncate to 15 characters to match Autopilot behavior
