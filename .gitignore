@@ -1,6 +1,5 @@
 .tests
 bin
-*.exe
 *.msi
 *.nupkg
 *.nuspec
