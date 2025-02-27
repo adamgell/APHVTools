@@ -72,16 +72,34 @@ function New-ClientVM {
             Write-Host "Reference Autopilot VHDX has been created.." -ForegroundColor Yellow
         }
         #endregion
+
         #region Get Autopilot policy
         Write-Verbose "Entering Autopilot policy region..."
-        #region Get Autopilot policy
+        # Initialize device naming template
+        $script:deviceNameTemplate = $null
+
         if (!($SkipAutoPilot)) {
             Write-Host "Grabbing Autopilot config.." -ForegroundColor Yellow
             Write-Verbose "Constructing full AutopilotConfigurationFile path"
             # Change this line - pass only the directory path
             Get-AutopilotPolicy -FileDestination $clientPath
+
+            # Load Autopilot naming convention if available
+            $autopilotConfigPath = "$clientPath\AutopilotConfigurationFile.json"
+            if (Test-Path $autopilotConfigPath) {
+                Write-Verbose "Loading AutopilotConfigurationFile.json to get naming convention"
+                try {
+                    $autopilotConfig = Get-Content -Path $autopilotConfigPath | ConvertFrom-Json
+                    if ($autopilotConfig.CloudAssignedDeviceName) {
+                        Write-Verbose "Found CloudAssignedDeviceName: $($autopilotConfig.CloudAssignedDeviceName)"
+                        $script:deviceNameTemplate = $autopilotConfig.CloudAssignedDeviceName
+                    }
+                }
+                catch {
+                    Write-Warning "Could not parse AutopilotConfigurationFile.json: $_"
+                }
+            }
         }
-        #endregion
         Write-Verbose "Exiting Autopilot policy region..."
         #endregion
 
@@ -132,14 +150,58 @@ function New-ClientVM {
             }
 
             $max += 1
-            $vmParams.VMName = "$($TenantName)_$max"
+
+            # Generate VM name based on CloudAssignedDeviceName if available, otherwise use default naming
+            if ($script:deviceNameTemplate) {
+                # Create and start the VM first to get the serial number
+                $tempVMName = "$($TenantName)_Temp$max"
+                Write-Verbose "Creating temporary VM: $tempVMName to get serial number"
+
+                # Copy the VHDX file for the VM
+                Copy-Item -Path $vmParams.RefVHDX -Destination "$($vmParams.ClientPath)\$tempVMName.vhdx"
+
+                # Create the VM without starting it
+                New-VM -Name $tempVMName -MemoryStartupBytes $VMMemory -VHDPath "$($vmParams.ClientPath)\$tempVMName.vhdx" -Generation 2 | Out-Null
+
+                # Get the serial number
+                $vmSerial = (Get-CimInstance -Namespace root\virtualization\v2 -class Msvm_VirtualSystemSettingData |
+                            Where-Object { ($_.VirtualSystemType -eq "Microsoft:Hyper-V:System:Realized") -and
+                                         ($_.elementname -eq $tempVMName) }).BIOSSerialNumber
+
+                # Generate the VM name based on the CloudAssignedDeviceName template
+                $vmName = $script:deviceNameTemplate -replace '%SERIAL%', $vmSerial
+
+                # Truncate to 15 characters to match Autopilot behavior
+                if ($vmName.Length -gt 15) {
+                    Write-Verbose "Truncating VM name from '$vmName' to 15 characters"
+                    $vmName = $vmName.Substring(0, 15)
+                    Write-Verbose "Truncated name: '$vmName'"
+                }
+
+                # Rename the VM
+                Write-Verbose "Renaming temporary VM to: $vmName based on Autopilot naming template"
+                Rename-VM -Name $tempVMName -NewName $vmName
+
+                # Rename the VHDX file
+                Stop-VM -Name $vmName -Force
+                Rename-Item -Path "$($vmParams.ClientPath)\$tempVMName.vhdx" -NewName "$vmName.vhdx"
+                Set-VM -Name $vmName -SmartPagingFilePath "$($vmParams.ClientPath)\$vmName"
+
+                $vmParams.VMName = $vmName
+            }
+            else {
+                $vmParams.VMName = "$($TenantName)_$max"
+            }
 
             Write-Verbose "Generated VMName: $($vmParams.VMName)"
             Write-Host "Creating VM: $($vmParams.VMName).." -ForegroundColor Yellow
 
             if ($PSCmdlet.ShouldProcess($vmParams.VMName, "Create new VM")) {
-                # Copy the VHDX file for the VM
-                Copy-Item -Path $vmParams.RefVHDX -Destination "$($vmParams.ClientPath)\$($vmParams.VMName).vhdx"
+                # If we didn't already create the VM for serial number
+                if (!$script:deviceNameTemplate) {
+                    # Copy the VHDX file for the VM
+                    Copy-Item -Path $vmParams.RefVHDX -Destination "$($vmParams.ClientPath)\$($vmParams.VMName).vhdx"
+                }
 
                 # Add Autopilot Config if needed
                 if (!($SkipAutoPilot)) {
@@ -153,9 +215,18 @@ function New-ClientVM {
                     Add-TroubleshootingTools -VMName $vmParams.VMName -ClientPath $vmParams.ClientPath
                 }
 
-                # Create and start the VM
-                Write-Verbose "Creating VM with the prepared VHDX"
-                New-VM -Name $vmParams.VMName -MemoryStartupBytes $VMMemory -VHDPath "$($vmParams.ClientPath)\$($vmParams.VMName).vhdx" -Generation 2 | Out-Null
+                # Create and start the VM if it wasn't already created for serial number
+                if (!$script:deviceNameTemplate) {
+                    Write-Verbose "Creating VM with the prepared VHDX"
+                    New-VM -Name $vmParams.VMName -MemoryStartupBytes $VMMemory -VHDPath "$($vmParams.ClientPath)\$($vmParams.VMName).vhdx" -Generation 2 | Out-Null
+
+                    # Get the serial number for VM Notes
+                    $vmSerial = (Get-CimInstance -Namespace root\virtualization\v2 -class Msvm_VirtualSystemSettingData |
+                                Where-Object { ($_.VirtualSystemType -eq "Microsoft:Hyper-V:System:Realized") -and
+                                             ($_.elementname -eq $vmParams.VMName) }).BIOSSerialNumber
+                }
+
+                # Configure VM settings
                 Enable-VMIntegrationService -vmName $vmParams.VMName -Name "Guest Service Interface"
                 Set-VM -name $vmParams.VMName -CheckpointType Disabled
                 Set-VMProcessor -VMName $vmParams.VMName -Count $vmParams.CPUCount
@@ -176,10 +247,6 @@ function New-ClientVM {
                 Enable-VMTPM -VMName $vmParams.VMName
 
                 # Set VM Info with Serial number
-                $vmSerial = (Get-CimInstance -Namespace root\virtualization\v2 -class Msvm_VirtualSystemSettingData |
-                            Where-Object { ($_.VirtualSystemType -eq "Microsoft:Hyper-V:System:Realized") -and
-                                           ($_.elementname -eq $vmParams.VMName) }).BIOSSerialNumber
-
                 Get-VM -Name $vmParams.VMName | Set-VM -Notes "Serial# $vmSerial | Tenant: $TenantName"
 
                 # Start the VM
@@ -209,14 +276,58 @@ function New-ClientVM {
             # Create each VM with incremental numbering
             for ($i = 1; $i -le [int]$NumberOfVMs; $i++) {
                 $vmNumber = $startNumber + $i
-                $vmParams.VMName = "$($TenantName)_$vmNumber"
+
+                # Generate VM name based on CloudAssignedDeviceName if available, otherwise use default naming
+                if ($script:deviceNameTemplate) {
+                    # Create a temporary VM to get serial number
+                    $tempVMName = "$($TenantName)_Temp$vmNumber"
+                    Write-Verbose "Creating temporary VM: $tempVMName to get serial number"
+
+                    # Copy the VHDX file for the VM
+                    Copy-Item -Path $vmParams.RefVHDX -Destination "$($vmParams.ClientPath)\$tempVMName.vhdx"
+
+                    # Create the VM without starting it
+                    New-VM -Name $tempVMName -MemoryStartupBytes $VMMemory -VHDPath "$($vmParams.ClientPath)\$tempVMName.vhdx" -Generation 2 | Out-Null
+
+                    # Get the serial number
+                    $vmSerial = (Get-CimInstance -Namespace root\virtualization\v2 -class Msvm_VirtualSystemSettingData |
+                                Where-Object { ($_.VirtualSystemType -eq "Microsoft:Hyper-V:System:Realized") -and
+                                             ($_.elementname -eq $tempVMName) }).BIOSSerialNumber
+
+                    # Generate the VM name based on the CloudAssignedDeviceName template
+                    $vmName = $script:deviceNameTemplate -replace '%SERIAL%', $vmSerial
+
+                    # Truncate to 15 characters to match Autopilot behavior
+                    if ($vmName.Length -gt 15) {
+                        Write-Verbose "Truncating VM name from '$vmName' to 15 characters"
+                        $vmName = $vmName.Substring(0, 15)
+                        Write-Verbose "Truncated name: '$vmName'"
+                    }
+
+                    # Rename the VM
+                    Write-Verbose "Renaming temporary VM to: $vmName based on Autopilot naming template"
+                    Rename-VM -Name $tempVMName -NewName $vmName
+
+                    # Rename the VHDX file
+                    Stop-VM -Name $vmName -Force
+                    Rename-Item -Path "$($vmParams.ClientPath)\$tempVMName.vhdx" -NewName "$vmName.vhdx"
+                    Set-VM -Name $vmName -SmartPagingFilePath "$($vmParams.ClientPath)\$vmName"
+
+                    $vmParams.VMName = $vmName
+                }
+                else {
+                    $vmParams.VMName = "$($TenantName)_$vmNumber"
+                }
 
                 Write-Verbose "Generated VMName: $($vmParams.VMName)"
                 Write-Host "Creating VM: $($vmParams.VMName).." -ForegroundColor Yellow
 
                 if ($PSCmdlet.ShouldProcess($vmParams.VMName, "Create new VM")) {
-                    # Copy the VHDX file for the VM
-                    Copy-Item -Path $vmParams.RefVHDX -Destination "$($vmParams.ClientPath)\$($vmParams.VMName).vhdx"
+                    # If we didn't already create the VM for serial number
+                    if (!$script:deviceNameTemplate) {
+                        # Copy the VHDX file for the VM
+                        Copy-Item -Path $vmParams.RefVHDX -Destination "$($vmParams.ClientPath)\$($vmParams.VMName).vhdx"
+                    }
 
                     # Add Autopilot Config if needed
                     if (!($SkipAutoPilot)) {
@@ -230,9 +341,18 @@ function New-ClientVM {
                         Add-TroubleshootingTools -VMName $vmParams.VMName -ClientPath $vmParams.ClientPath
                     }
 
-                    # Create and start the VM
-                    Write-Verbose "Creating VM with the prepared VHDX"
-                    New-VM -Name $vmParams.VMName -MemoryStartupBytes $VMMemory -VHDPath "$($vmParams.ClientPath)\$($vmParams.VMName).vhdx" -Generation 2 | Out-Null
+                    # Create and start the VM if it wasn't already created for serial number
+                    if (!$script:deviceNameTemplate) {
+                        Write-Verbose "Creating VM with the prepared VHDX"
+                        New-VM -Name $vmParams.VMName -MemoryStartupBytes $VMMemory -VHDPath "$($vmParams.ClientPath)\$($vmParams.VMName).vhdx" -Generation 2 | Out-Null
+
+                        # Get the serial number for VM Notes
+                        $vmSerial = (Get-CimInstance -Namespace root\virtualization\v2 -class Msvm_VirtualSystemSettingData |
+                                    Where-Object { ($_.VirtualSystemType -eq "Microsoft:Hyper-V:System:Realized") -and
+                                                 ($_.elementname -eq $vmParams.VMName) }).BIOSSerialNumber
+                    }
+
+                    # Configure VM settings
                     Enable-VMIntegrationService -vmName $vmParams.VMName -Name "Guest Service Interface"
                     Set-VM -name $vmParams.VMName -CheckpointType Disabled
                     Set-VMProcessor -VMName $vmParams.VMName -Count $vmParams.CPUCount
@@ -253,10 +373,6 @@ function New-ClientVM {
                     Enable-VMTPM -VMName $vmParams.VMName
 
                     # Set VM Info with Serial number
-                    $vmSerial = (Get-CimInstance -Namespace root\virtualization\v2 -class Msvm_VirtualSystemSettingData |
-                                Where-Object { ($_.VirtualSystemType -eq "Microsoft:Hyper-V:System:Realized") -and
-                                              ($_.elementname -eq $vmParams.VMName) }).BIOSSerialNumber
-
                     Get-VM -Name $vmParams.VMName | Set-VM -Notes "Serial# $vmSerial | Tenant: $TenantName"
 
                     # Start the VM
