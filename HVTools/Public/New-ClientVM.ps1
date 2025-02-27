@@ -138,17 +138,52 @@ function New-ClientVM {
             Write-Host "Creating VM: $($vmParams.VMName).." -ForegroundColor Yellow
 
             if ($PSCmdlet.ShouldProcess($vmParams.VMName, "Create new VM")) {
-                Write-Verbose "Calling New-ClientDevice with parameters:"
-                $vmParams.GetEnumerator() | ForEach-Object {
-                    Write-Verbose "  $($_.Key): $($_.Value)"
+                # Copy the VHDX file for the VM
+                Copy-Item -Path $vmParams.RefVHDX -Destination "$($vmParams.ClientPath)\$($vmParams.VMName).vhdx"
+
+                # Add Autopilot Config if needed
+                if (!($SkipAutoPilot)) {
+                    Write-Verbose "Publishing Autopilot config"
+                    Publish-AutoPilotConfig -vmName $vmParams.VMName -clientPath $vmParams.ClientPath
                 }
-                New-ClientDevice @vmParams -Verbose
 
                 # Add troubleshooting tools if requested
                 if ($IncludeTools) {
                     Write-Verbose "Including troubleshooting tools for $($vmParams.VMName)"
-                    Add-TroubleshootingTools -VMName $vmParams.VMName -ClientPath $clientPath
+                    Add-TroubleshootingTools -VMName $vmParams.VMName -ClientPath $vmParams.ClientPath
                 }
+
+                # Create and start the VM
+                Write-Verbose "Creating VM with the prepared VHDX"
+                New-VM -Name $vmParams.VMName -MemoryStartupBytes $VMMemory -VHDPath "$($vmParams.ClientPath)\$($vmParams.VMName).vhdx" -Generation 2 | Out-Null
+                Enable-VMIntegrationService -vmName $vmParams.VMName -Name "Guest Service Interface"
+                Set-VM -name $vmParams.VMName -CheckpointType Disabled
+                Set-VMProcessor -VMName $vmParams.VMName -Count $vmParams.CPUCount
+                Set-VMFirmware -VMName $vmParams.VMName -EnableSecureBoot On
+                Get-VMNetworkAdapter -vmName $vmParams.VMName | Connect-VMNetworkAdapter -SwitchName $vmParams.VSwitchName | Set-VMNetworkAdapter -Name $vmParams.VSwitchName -DeviceNaming On
+
+                if ($script:hvConfig.vLanId) {
+                    Set-VMNetworkAdapterVlan -Access -VMName $vmParams.VMName -VlanId $script:hvConfig.vLanId
+                }
+
+                $owner = Get-HgsGuardian UntrustedGuardian -ErrorAction SilentlyContinue
+                If (!$owner) {
+                    # Creating new UntrustedGuardian since it did not exist
+                    $owner = New-HgsGuardian -Name UntrustedGuardian -GenerateCertificates
+                }
+                $kp = New-HgsKeyProtector -Owner $owner -AllowUntrustedRoot
+                Set-VMKeyProtector -VMName $vmParams.VMName -KeyProtector $kp.RawData
+                Enable-VMTPM -VMName $vmParams.VMName
+
+                # Set VM Info with Serial number
+                $vmSerial = (Get-CimInstance -Namespace root\virtualization\v2 -class Msvm_VirtualSystemSettingData |
+                            Where-Object { ($_.VirtualSystemType -eq "Microsoft:Hyper-V:System:Realized") -and
+                                           ($_.elementname -eq $vmParams.VMName) }).BIOSSerialNumber
+
+                Get-VM -Name $vmParams.VMName | Set-VM -Notes "Serial# $vmSerial | Tenant: $TenantName"
+
+                # Start the VM
+                Start-VM -Name $vmParams.VMName
             }
         }
         else {
@@ -180,17 +215,52 @@ function New-ClientVM {
                 Write-Host "Creating VM: $($vmParams.VMName).." -ForegroundColor Yellow
 
                 if ($PSCmdlet.ShouldProcess($vmParams.VMName, "Create new VM")) {
-                    Write-Verbose "Calling New-ClientDevice with parameters:"
-                    $vmParams.GetEnumerator() | ForEach-Object {
-                        Write-Verbose "  $($_.Key): $($_.Value)"
+                    # Copy the VHDX file for the VM
+                    Copy-Item -Path $vmParams.RefVHDX -Destination "$($vmParams.ClientPath)\$($vmParams.VMName).vhdx"
+
+                    # Add Autopilot Config if needed
+                    if (!($SkipAutoPilot)) {
+                        Write-Verbose "Publishing Autopilot config"
+                        Publish-AutoPilotConfig -vmName $vmParams.VMName -clientPath $vmParams.ClientPath
                     }
-                    New-ClientDevice @vmParams -Verbose
 
                     # Add troubleshooting tools if requested
                     if ($IncludeTools) {
                         Write-Verbose "Including troubleshooting tools for $($vmParams.VMName)"
-                        Add-TroubleshootingTools -VMName $vmParams.VMName -ClientPath $clientPath
+                        Add-TroubleshootingTools -VMName $vmParams.VMName -ClientPath $vmParams.ClientPath
                     }
+
+                    # Create and start the VM
+                    Write-Verbose "Creating VM with the prepared VHDX"
+                    New-VM -Name $vmParams.VMName -MemoryStartupBytes $VMMemory -VHDPath "$($vmParams.ClientPath)\$($vmParams.VMName).vhdx" -Generation 2 | Out-Null
+                    Enable-VMIntegrationService -vmName $vmParams.VMName -Name "Guest Service Interface"
+                    Set-VM -name $vmParams.VMName -CheckpointType Disabled
+                    Set-VMProcessor -VMName $vmParams.VMName -Count $vmParams.CPUCount
+                    Set-VMFirmware -VMName $vmParams.VMName -EnableSecureBoot On
+                    Get-VMNetworkAdapter -vmName $vmParams.VMName | Connect-VMNetworkAdapter -SwitchName $vmParams.VSwitchName | Set-VMNetworkAdapter -Name $vmParams.VSwitchName -DeviceNaming On
+
+                    if ($script:hvConfig.vLanId) {
+                        Set-VMNetworkAdapterVlan -Access -VMName $vmParams.VMName -VlanId $script:hvConfig.vLanId
+                    }
+
+                    $owner = Get-HgsGuardian UntrustedGuardian -ErrorAction SilentlyContinue
+                    If (!$owner) {
+                        # Creating new UntrustedGuardian since it did not exist
+                        $owner = New-HgsGuardian -Name UntrustedGuardian -GenerateCertificates
+                    }
+                    $kp = New-HgsKeyProtector -Owner $owner -AllowUntrustedRoot
+                    Set-VMKeyProtector -VMName $vmParams.VMName -KeyProtector $kp.RawData
+                    Enable-VMTPM -VMName $vmParams.VMName
+
+                    # Set VM Info with Serial number
+                    $vmSerial = (Get-CimInstance -Namespace root\virtualization\v2 -class Msvm_VirtualSystemSettingData |
+                                Where-Object { ($_.VirtualSystemType -eq "Microsoft:Hyper-V:System:Realized") -and
+                                              ($_.elementname -eq $vmParams.VMName) }).BIOSSerialNumber
+
+                    Get-VM -Name $vmParams.VMName | Set-VM -Notes "Serial# $vmSerial | Tenant: $TenantName"
+
+                    # Start the VM
+                    Start-VM -Name $vmParams.VMName
                 }
             }
         }
