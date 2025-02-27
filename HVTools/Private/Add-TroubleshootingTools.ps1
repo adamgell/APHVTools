@@ -81,6 +81,7 @@ function Add-TroubleshootingTools {
                         $shortcut = $wshShell.CreateShortcut("$desktopPath\$toolName.lnk")
                         $shortcut.TargetPath = $toolPath
                         $shortcut.WorkingDirectory = $vmToolsFolder
+                        $shortcut.IconLocation = "$toolPath,0"
                         $shortcut.Save()
                         Write-Verbose "Created desktop shortcut for $toolName"
                     }
