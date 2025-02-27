@@ -7,4 +7,3 @@ bin
 *.zip
 localenv.ps1
 todo.md
-!module.nuspec

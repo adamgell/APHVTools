@@ -74,17 +74,20 @@ try {
             # Always increment patch version for a new build
             $patchVersion++
         }
-
-        # Set build ID to 0 for development builds
-        $buildId = 0
     }
     else {
         # For CI/CD, use the BUILD_BUILDID env variable if available, otherwise use 0
         $buildId = if ($env:BUILD_BUILDID) { [int]$env:BUILD_BUILDID } else { 0 }
     }
 
-    # Create the new version
-    $newVersion = New-Object version -ArgumentList $majorVersion, $minorVersion, $patchVersion, $buildId
+    # Create the new version (use 3-part version instead of 4-part for cleaner display)
+    if ($buildLocal) {
+        # For local builds, use 3-part version (Major.Minor.Patch)
+        $newVersion = New-Object version -ArgumentList $majorVersion, $minorVersion, $patchVersion
+    } else {
+        # For CI/CD builds, include buildId as 4th part
+        $newVersion = New-Object version -ArgumentList $majorVersion, $minorVersion, $patchVersion, $buildId
+    }
     #endregion
 
     #region Build out the release
@@ -198,8 +201,8 @@ try {
         -RootModule "$moduleName.psm1" `
         -ModuleVersion $newVersion `
         -Description $description `
-        -Author "Adam Gell" `
-        -CompanyName "None" `
+        -Author "Ben Reader" `
+        -CompanyName "Powers-Hell" `
         -RequiredModules $RequiredModules `
         -FunctionsToExport $functions `
         -ReleaseNotes $releaseNotes `
