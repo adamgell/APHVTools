@@ -37,6 +37,9 @@
 .NOTES
     Requires HVTools module and administrator privileges
     For admin account injection, use New-ClientVM with -CaptureHardwareHash switch
+    
+    Use -Verbose for detailed output
+    Use -Debug for comprehensive debugging information
 #>
 
 [CmdletBinding(SupportsShouldProcess)]
@@ -60,19 +63,15 @@ param (
     [string]$WorkspacePath,
     
     [Parameter(HelpMessage = "Recreate reference VHDX if it exists")]
-    [switch]$Force,
-    
-    [Parameter(HelpMessage = "Enable debug output for detailed troubleshooting")]
-    [switch]$Debug
+    [switch]$Force
 )
 
 # Requires Administrator
 #Requires -RunAsAdministrator
 
-# Set debug preference (Verbose is handled automatically by CmdletBinding)
-if ($Debug) {
-    $DebugPreference = 'Continue'
-    # Also enable verbose when debug is enabled
+# Debug and Verbose preferences are handled automatically by CmdletBinding
+# If Debug is enabled, also enable Verbose for more detailed output
+if ($DebugPreference -eq 'Continue') {
     $VerbosePreference = 'Continue'
 }
 
@@ -80,7 +79,7 @@ Write-Host "=== HVTools Reference Image Creator ===" -ForegroundColor Cyan
 Write-Host "Creating reference VHDX from: $IsoPath" -ForegroundColor Green
 
 # Show debug information if requested
-if ($Debug) {
+if ($DebugPreference -eq 'Continue') {
     Write-Host "`n=== Debug Information ===" -ForegroundColor Magenta
     Write-Host "PowerShell Version: $($PSVersionTable.PSVersion)" -ForegroundColor Gray
     Write-Host "OS Version: $([System.Environment]::OSVersion.VersionString)" -ForegroundColor Gray
@@ -180,7 +179,7 @@ try {
     Write-Host "`n[4/5] Adding image to HVTools configuration..." -ForegroundColor Yellow
     Write-Host "Note: This will prompt for Windows edition selection and then create the reference VHDX" -ForegroundColor Cyan
     
-    if ($Debug) {
+    if ($DebugPreference -eq 'Continue') {
         Write-Host "`nDEBUG - Before Add-ImageToConfig:" -ForegroundColor Magenta
         Write-Host "  Image Name: $ImageName" -ForegroundColor Gray
         Write-Host "  ISO Path: $IsoPath" -ForegroundColor Gray
@@ -209,14 +208,14 @@ try {
     if ($PSCmdlet.ShouldProcess($ImageName, "Add image to configuration and create reference VHDX")) {
         try {
             # Enable verbose output for Add-ImageToConfig if debug is enabled or verbose is on
-            if ($Debug -or $VerbosePreference -eq 'Continue') {
+            if ($DebugPreference -eq 'Continue' -or $VerbosePreference -eq 'Continue') {
                 $oldVerbosePreference = $VerbosePreference
                 $VerbosePreference = 'Continue'
             }
             
             Add-ImageToConfig -ImageName $ImageName -IsoPath $IsoPath
             
-            if ($Debug) {
+            if ($DebugPreference -eq 'Continue') {
                 Write-Host "`nDEBUG - After Add-ImageToConfig attempt:" -ForegroundColor Magenta
                 # Check if the image was added to config
                 $updatedConfig = Get-HVToolsConfig -Raw -ErrorAction SilentlyContinue
