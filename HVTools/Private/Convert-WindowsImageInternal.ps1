@@ -132,17 +132,41 @@ assign letter=W
         $diskpartScript | Out-File -FilePath $scriptPath -Encoding ASCII
         
         Write-Verbose "Executing diskpart script: $scriptPath"
+        Write-Verbose "Diskpart script content:"
+        Write-Verbose ($diskpartScript -split "`n" | ForEach-Object { "  $_" }) -join "`n"
+        
         $result = & diskpart /s $scriptPath
         Write-Verbose "Diskpart result: $($result -join "`n")"
+        
+        # Check if diskpart succeeded
+        if ($LASTEXITCODE -ne 0) {
+            throw "Diskpart failed with exit code $LASTEXITCODE. Output: $($result -join "`n")"
+        }
+        
+        # Verify the W: drive is available
+        Start-Sleep -Seconds 2  # Give time for drive to be available
+        if (-not (Test-Path "W:\")) {
+            throw "Windows partition (W:) was not created or is not accessible"
+        }
+        Write-Verbose "Windows partition (W:) is accessible"
         
         # Clean up diskpart script
         Remove-Item $scriptPath -Force -ErrorAction SilentlyContinue
         
         # Apply Windows image using DISM
         Write-Verbose "Applying Windows image using DISM"
+        Write-Verbose "WIM Path: $wimPath"
+        Write-Verbose "Edition Index: $Edition"
+        Write-Verbose "Target Directory: W:\"
+        
+        # Verify WIM file exists and is accessible
+        if (-not (Test-Path $wimPath)) {
+            throw "WIM file not found: $wimPath"
+        }
+        
         $dismArgs = @(
             "/Apply-Image"
-            "/ImageFile:`"$wimPath`""
+            "/ImageFile:$wimPath"
             "/Index:$Edition"
             "/ApplyDir:W:\"
         )
@@ -151,8 +175,21 @@ assign letter=W
         $dismResult = & dism.exe @dismArgs
         
         if ($LASTEXITCODE -ne 0) {
-            throw "DISM apply failed with exit code $LASTEXITCODE. Output: $($dismResult -join "`n")"
+            # Get more detailed error information
+            $dismLog = "C:\Windows\Logs\DISM\dism.log"
+            $logContent = ""
+            if (Test-Path $dismLog) {
+                try {
+                    $logContent = Get-Content $dismLog -Tail 20 -ErrorAction SilentlyContinue | Out-String
+                }
+                catch {
+                    $logContent = "Could not read DISM log: $_"
+                }
+            }
+            throw "DISM apply failed with exit code $LASTEXITCODE.`nDISM Output: $($dismResult -join "`n")`nLast 20 lines of DISM log:`n$logContent"
         }
+        
+        Write-Verbose "DISM apply completed successfully"
         
         # Apply unattend.xml if provided
         if ($UnattendPath -and (Test-Path $UnattendPath)) {
