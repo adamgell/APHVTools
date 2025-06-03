@@ -111,6 +111,56 @@ function Convert-WindowsImageInternal {
         Write-Verbose "Format: $VhdFormat"
         
         try {
+            # Check if VHDX already exists and is mounted
+            if (Test-Path $VhdPath) {
+                Write-Verbose "VHDX file already exists at: $VhdPath"
+                $existingVhd = Get-VHD -Path $VhdPath -ErrorAction SilentlyContinue
+                if ($existingVhd -and $existingVhd.Attached) {
+                    Write-Warning "VHDX is already mounted. Attempting to dismount..."
+                    try {
+                        Dismount-VHD -Path $VhdPath -ErrorAction Stop
+                        Write-Verbose "Existing VHDX dismounted successfully"
+                    }
+                    catch {
+                        throw "Cannot dismount existing VHDX: $_"
+                    }
+                }
+                # Remove existing file
+                Write-Verbose "Removing existing VHDX file..."
+                Remove-Item -Path $VhdPath -Force -ErrorAction Stop
+            }
+            
+            # Check if drive letters are in use
+            $drivesInUse = @()
+            if (Get-PSDrive -Name W -ErrorAction SilentlyContinue) {
+                $drivesInUse += "W:"
+            }
+            if ($DiskLayout -eq "UEFI" -and (Get-PSDrive -Name S -ErrorAction SilentlyContinue)) {
+                $drivesInUse += "S:"
+            }
+            
+            if ($drivesInUse.Count -gt 0) {
+                Write-Warning "The following drive letters are already in use: $($drivesInUse -join ', ')"
+                Write-Warning "Attempting to find alternative drive letters..."
+                
+                # Find alternative drive letters
+                $availableLetters = 67..90 | ForEach-Object { [char]$_ } | Where-Object { 
+                    $_ -notin @('C', 'D') -and !(Get-PSDrive -Name $_ -ErrorAction SilentlyContinue)
+                }
+                
+                if ($availableLetters.Count -lt 2) {
+                    throw "Not enough available drive letters. Please free up some drive letters and try again."
+                }
+                
+                # Use alternative letters
+                $script:altWindowsDrive = $availableLetters[0]
+                $script:altSystemDrive = $availableLetters[1]
+                Write-Verbose "Using alternative drive letters: Windows=$($script:altWindowsDrive), System=$($script:altSystemDrive)"
+            } else {
+                $script:altWindowsDrive = 'W'
+                $script:altSystemDrive = 'S'
+            }
+            
             # Create the VHDX file
             Write-Verbose "Creating new VHDX file..."
             $vhdParams = @{
@@ -139,8 +189,8 @@ function Convert-WindowsImageInternal {
                 Write-Verbose "Creating UEFI partition layout..."
                 
                 # Create EFI System Partition (ESP)
-                Write-Verbose "Creating EFI System Partition (100MB)..."
-                $efiPartition = New-Partition -DiskNumber $diskNumber -Size 100MB -GptType '{c12a7328-f81f-11d2-ba4b-00a0c93ec93b}' -DriveLetter S -ErrorAction Stop
+                Write-Verbose "Creating EFI System Partition (100MB) with drive letter $($script:altSystemDrive)..."
+                $efiPartition = New-Partition -DiskNumber $diskNumber -Size 100MB -GptType '{c12a7328-f81f-11d2-ba4b-00a0c93ec93b}' -DriveLetter $script:altSystemDrive -ErrorAction Stop
                 Format-Volume -Partition $efiPartition -FileSystem FAT32 -NewFileSystemLabel "System" -Confirm:$false -ErrorAction Stop | Out-Null
                 Write-Verbose "EFI partition created and formatted"
                 
@@ -150,8 +200,8 @@ function Convert-WindowsImageInternal {
                 Write-Verbose "MSR partition created"
                 
                 # Create Windows partition
-                Write-Verbose "Creating Windows partition (remaining space)..."
-                $windowsPartition = New-Partition -DiskNumber $diskNumber -UseMaximumSize -DriveLetter W -ErrorAction Stop
+                Write-Verbose "Creating Windows partition (remaining space) with drive letter $($script:altWindowsDrive)..."
+                $windowsPartition = New-Partition -DiskNumber $diskNumber -UseMaximumSize -DriveLetter $script:altWindowsDrive -ErrorAction Stop
                 Format-Volume -Partition $windowsPartition -FileSystem NTFS -NewFileSystemLabel "Windows" -Confirm:$false -ErrorAction Stop | Out-Null
                 Write-Verbose "Windows partition created and formatted"
             } else {
@@ -159,8 +209,8 @@ function Convert-WindowsImageInternal {
                 Write-Verbose "Creating BIOS/MBR partition layout..."
                 
                 # Create single active Windows partition
-                Write-Verbose "Creating Windows partition (full disk)..."
-                $windowsPartition = New-Partition -DiskNumber $diskNumber -UseMaximumSize -IsActive -DriveLetter W -ErrorAction Stop
+                Write-Verbose "Creating Windows partition (full disk) with drive letter $($script:altWindowsDrive)..."
+                $windowsPartition = New-Partition -DiskNumber $diskNumber -UseMaximumSize -IsActive -DriveLetter $script:altWindowsDrive -ErrorAction Stop
                 Format-Volume -Partition $windowsPartition -FileSystem NTFS -NewFileSystemLabel "Windows" -Confirm:$false -ErrorAction Stop | Out-Null
                 Write-Verbose "Windows partition created and formatted"
             }
@@ -183,8 +233,8 @@ function Convert-WindowsImageInternal {
             throw
         }
         
-        # Verify the W: drive is available
-        Write-Verbose "Waiting for W: drive to become available..."
+        # Verify the Windows drive is available
+        Write-Verbose "Waiting for Windows drive ($($script:altWindowsDrive):) to become available..."
         $maxRetries = 10
         $retryCount = 0
         $driveReady = $false
@@ -193,18 +243,18 @@ function Convert-WindowsImageInternal {
             Start-Sleep -Seconds 2
             $retryCount++
             
-            # Check if W: drive exists
-            $wDrive = Get-PSDrive -Name W -ErrorAction SilentlyContinue
-            if ($wDrive) {
-                Write-Verbose "W: drive found, verifying accessibility..."
-                if (Test-Path "W:\") {
+            # Check if Windows drive exists
+            $windowsDrive = Get-PSDrive -Name $script:altWindowsDrive -ErrorAction SilentlyContinue
+            if ($windowsDrive) {
+                Write-Verbose "$($script:altWindowsDrive): drive found, verifying accessibility..."
+                if (Test-Path "$($script:altWindowsDrive):\") {
                     $driveReady = $true
-                    Write-Verbose "Windows partition (W:) is accessible"
+                    Write-Verbose "Windows partition ($($script:altWindowsDrive):) is accessible"
                 } else {
-                    Write-Verbose "W: drive exists but not accessible yet (attempt $retryCount/$maxRetries)"
+                    Write-Verbose "$($script:altWindowsDrive): drive exists but not accessible yet (attempt $retryCount/$maxRetries)"
                 }
             } else {
-                Write-Verbose "W: drive not found yet (attempt $retryCount/$maxRetries)"
+                Write-Verbose "$($script:altWindowsDrive): drive not found yet (attempt $retryCount/$maxRetries)"
                 
                 # Try to refresh drive list
                 Get-PSDrive | Out-Null
@@ -216,7 +266,7 @@ function Convert-WindowsImageInternal {
             Write-Verbose "Available drives:"
             Get-PSDrive -PSProvider FileSystem | ForEach-Object { Write-Verbose "  $($_.Name): $($_.Root)" }
             
-            throw "Windows partition (W:) was not created or is not accessible after $maxRetries attempts"
+            throw "Windows partition ($($script:altWindowsDrive):) was not created or is not accessible after $maxRetries attempts"
         }
         
         # Apply Windows image using DISM
@@ -234,7 +284,7 @@ function Convert-WindowsImageInternal {
             "/Apply-Image"
             "/ImageFile:$wimPath"
             "/Index:$Edition"
-            "/ApplyDir:W:\"
+            "/ApplyDir:$($script:altWindowsDrive):\"
         )
         
         Write-Verbose "DISM command: dism.exe $($dismArgs -join ' ')"
@@ -261,15 +311,15 @@ function Convert-WindowsImageInternal {
         # Apply unattend.xml if provided
         if ($UnattendPath -and (Test-Path $UnattendPath)) {
             Write-Verbose "Applying unattend.xml: $UnattendPath"
-            Copy-Item -Path $UnattendPath -Destination "W:\Windows\System32\Sysprep\unattend.xml" -Force
+            Copy-Item -Path $UnattendPath -Destination "$($script:altWindowsDrive):\Windows\System32\Sysprep\unattend.xml" -Force
         }
         
         # Configure boot for UEFI
         if ($DiskLayout -eq "UEFI") {
             Write-Verbose "Configuring UEFI boot"
             $bcdbootArgs = @(
-                "W:\Windows"
-                "/s", "S:"
+                "$($script:altWindowsDrive):\Windows"
+                "/s", "$($script:altSystemDrive):"
                 "/f", "UEFI"
             )
             
@@ -283,8 +333,8 @@ function Convert-WindowsImageInternal {
             # Configure boot for BIOS
             Write-Verbose "Configuring BIOS boot"
             $bcdbootArgs = @(
-                "W:\Windows"
-                "/s", "W:"
+                "$($script:altWindowsDrive):\Windows"
+                "/s", "$($script:altWindowsDrive):"
             )
             
             Write-Verbose "BCDBoot command: bcdboot.exe $($bcdbootArgs -join ' ')"
