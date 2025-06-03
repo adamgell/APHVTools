@@ -73,6 +73,9 @@ function Convert-WindowsImageInternal {
     Write-Verbose "  SizeBytes: $SizeBytes"
     Write-Verbose "  UnattendPath: $UnattendPath"
     
+    # Variables that need to be accessible in finally block
+    $diskNumber = $null
+    
     try {
         # Ensure target directory exists
         $targetDir = Split-Path $VhdPath -Parent
@@ -100,104 +103,84 @@ function Convert-WindowsImageInternal {
             Write-Verbose "Found WIM file at: $wimPath"
         }
         
-        # Create VHDX using diskpart
-        Write-Verbose "Creating VHDX file using diskpart"
+        # Create VHDX using PowerShell cmdlets only (no diskpart)
+        Write-Verbose "Creating VHDX using PowerShell cmdlets"
+        Write-Verbose "VHDX Path: $VhdPath"
+        Write-Verbose "Size: $([math]::Round($SizeBytes/1GB, 2)) GB"
+        Write-Verbose "Type: $VhdType"
+        Write-Verbose "Format: $VhdFormat"
         
-        # Build diskpart script line by line
-        $diskpartCommands = @()
-        $diskpartCommands += "create vdisk file=`"$VhdPath`" maximum=$([math]::Round($SizeBytes/1MB)) type=$(if($VhdType -eq 'Dynamic'){'expandable'}else{'fixed'})"
-        $diskpartCommands += "select vdisk file=`"$VhdPath`""
-        $diskpartCommands += "attach vdisk"
-        
-        if ($DiskLayout -eq "UEFI") {
-            $diskpartCommands += "convert gpt"
-            $diskpartCommands += "create partition efi size=100"
-            $diskpartCommands += "format quick fs=fat32 label=`"System`""
-            $diskpartCommands += "assign letter=S"
-            $diskpartCommands += "create partition msr size=16"
-            $diskpartCommands += "create partition primary"
-            $diskpartCommands += "format quick fs=ntfs label=`"Windows`""
-            $diskpartCommands += "assign letter=W"
-        } else {
-            $diskpartCommands += "create partition primary active"
-            $diskpartCommands += "format quick fs=ntfs label=`"Windows`""
-            $diskpartCommands += "assign letter=W"
-        }
-        
-        $diskpartScript = $diskpartCommands -join "`r`n"
-        
-        # Execute diskpart
-        $scriptPath = Join-Path $env:TEMP "hvtools_diskpart_$([guid]::NewGuid().ToString().Substring(0,8)).txt"
-        $diskpartScript | Out-File -FilePath $scriptPath -Encoding ASCII
-        
-        Write-Verbose "Executing diskpart script: $scriptPath"
-        Write-Verbose "Diskpart script content:"
-        $diskpartScript -split "`n" | ForEach-Object { Write-Verbose "  $_" }
-        
-        $result = & diskpart /s $scriptPath
-        if ($result) {
-            Write-Verbose "Diskpart result: $($result -join "`n")"
-        } else {
-            Write-Verbose "Diskpart completed with no output"
-        }
-        
-        # Check diskpart results and look for specific success/failure indicators
-        $outputString = if ($result) { $result -join "`n" } else { "No output" }
-        
-        # Check for various success indicators in the output
-        $vhdxCreated = $outputString -match "DiskPart successfully created the virtual disk file"
-        $vhdxSelected = $outputString -match "DiskPart successfully selected the virtual disk file"
-        $vhdxAttached = $outputString -match "DiskPart successfully attached the virtual disk file"
-        $partitionCreated = $outputString -match "DiskPart succeeded in creating the specified partition"
-        $volumeFormatted = $outputString -match "DiskPart successfully formatted the volume"
-        $letterAssigned = $outputString -match "DiskPart successfully assigned the drive letter"
-        
-        Write-Verbose "Diskpart operation results:"
-        Write-Verbose "  VHDX created: $vhdxCreated"
-        Write-Verbose "  VHDX selected: $vhdxSelected"
-        Write-Verbose "  VHDX attached: $vhdxAttached"
-        Write-Verbose "  Partition created: $partitionCreated"
-        Write-Verbose "  Volume formatted: $volumeFormatted"
-        Write-Verbose "  Drive letter assigned: $letterAssigned"
-        
-        # If we didn't get past attaching, there's a fundamental problem
-        if (-not $vhdxAttached) {
-            Write-Warning "VHDX was not successfully attached. Full diskpart output:"
-            Write-Warning $outputString
+        try {
+            # Create the VHDX file
+            Write-Verbose "Creating new VHDX file..."
+            $vhdParams = @{
+                Path = $VhdPath
+                SizeBytes = $SizeBytes
+                Dynamic = ($VhdType -eq 'Dynamic')
+            }
             
-            # Try alternative approach - use PowerShell cmdlets to complete the operation
-            Write-Verbose "Attempting to complete VHDX setup using PowerShell cmdlets..."
-            try {
-                # Mount the VHDX
-                $vhdx = Mount-VHD -Path $VhdPath -Passthru
-                $diskNumber = $vhdx.Number
+            New-VHD @vhdParams -ErrorAction Stop | Out-Null
+            Write-Verbose "VHDX file created successfully"
+            
+            # Mount the VHDX
+            Write-Verbose "Mounting VHDX..."
+            $vhdx = Mount-VHD -Path $VhdPath -Passthru -ErrorAction Stop
+            $diskNumber = $vhdx.Number
+            Write-Verbose "VHDX mounted as disk number: $diskNumber"
+            
+            # Initialize the disk
+            Write-Verbose "Initializing disk..."
+            $partitionStyle = if ($DiskLayout -eq "UEFI") { "GPT" } else { "MBR" }
+            Initialize-Disk -Number $diskNumber -PartitionStyle $partitionStyle -PassThru -ErrorAction Stop | Out-Null
+            Write-Verbose "Disk initialized with $partitionStyle partition style"
+            
+            if ($DiskLayout -eq "UEFI") {
+                # UEFI layout
+                Write-Verbose "Creating UEFI partition layout..."
                 
-                # Initialize and partition the disk
-                Initialize-Disk -Number $diskNumber -PartitionStyle GPT -PassThru | Out-Null
+                # Create EFI System Partition (ESP)
+                Write-Verbose "Creating EFI System Partition (100MB)..."
+                $efiPartition = New-Partition -DiskNumber $diskNumber -Size 100MB -GptType '{c12a7328-f81f-11d2-ba4b-00a0c93ec93b}' -DriveLetter S -ErrorAction Stop
+                Format-Volume -Partition $efiPartition -FileSystem FAT32 -NewFileSystemLabel "System" -Confirm:$false -ErrorAction Stop | Out-Null
+                Write-Verbose "EFI partition created and formatted"
                 
-                if ($DiskLayout -eq "UEFI") {
-                    # Create EFI partition
-                    New-Partition -DiskNumber $diskNumber -Size 100MB -GptType '{c12a7328-f81f-11d2-ba4b-00a0c93ec93b}' -DriveLetter S | 
-                        Format-Volume -FileSystem FAT32 -NewFileSystemLabel "System" -Confirm:$false | Out-Null
-                    
-                    # Create MSR partition
-                    New-Partition -DiskNumber $diskNumber -Size 16MB -GptType '{e3c9e316-0b5c-4db8-817d-f92df00215ae}' | Out-Null
-                    
-                    # Create Windows partition
-                    New-Partition -DiskNumber $diskNumber -UseMaximumSize -DriveLetter W | 
-                        Format-Volume -FileSystem NTFS -NewFileSystemLabel "Windows" -Confirm:$false | Out-Null
-                } else {
-                    # BIOS layout
-                    New-Partition -DiskNumber $diskNumber -UseMaximumSize -IsActive -DriveLetter W | 
-                        Format-Volume -FileSystem NTFS -NewFileSystemLabel "Windows" -Confirm:$false | Out-Null
-                }
+                # Create Microsoft Reserved Partition (MSR)
+                Write-Verbose "Creating Microsoft Reserved Partition (16MB)..."
+                New-Partition -DiskNumber $diskNumber -Size 16MB -GptType '{e3c9e316-0b5c-4db8-817d-f92df00215ae}' -ErrorAction Stop | Out-Null
+                Write-Verbose "MSR partition created"
                 
-                Write-Verbose "Successfully set up VHDX using PowerShell cmdlets"
+                # Create Windows partition
+                Write-Verbose "Creating Windows partition (remaining space)..."
+                $windowsPartition = New-Partition -DiskNumber $diskNumber -UseMaximumSize -DriveLetter W -ErrorAction Stop
+                Format-Volume -Partition $windowsPartition -FileSystem NTFS -NewFileSystemLabel "Windows" -Confirm:$false -ErrorAction Stop | Out-Null
+                Write-Verbose "Windows partition created and formatted"
+            } else {
+                # BIOS/MBR layout
+                Write-Verbose "Creating BIOS/MBR partition layout..."
+                
+                # Create single active Windows partition
+                Write-Verbose "Creating Windows partition (full disk)..."
+                $windowsPartition = New-Partition -DiskNumber $diskNumber -UseMaximumSize -IsActive -DriveLetter W -ErrorAction Stop
+                Format-Volume -Partition $windowsPartition -FileSystem NTFS -NewFileSystemLabel "Windows" -Confirm:$false -ErrorAction Stop | Out-Null
+                Write-Verbose "Windows partition created and formatted"
             }
-            catch {
-                Write-Error "Failed to set up VHDX using PowerShell cmdlets: $_"
-                throw
+            
+            Write-Verbose "VHDX setup completed successfully using PowerShell cmdlets"
+        }
+        catch {
+            Write-Error "Failed to create/setup VHDX: $_"
+            # Clean up on failure
+            if ($diskNumber) {
+                try { 
+                    Dismount-VHD -DiskNumber $diskNumber -ErrorAction SilentlyContinue 
+                } catch { }
             }
+            if (Test-Path $VhdPath) {
+                try { 
+                    Remove-Item $VhdPath -Force -ErrorAction SilentlyContinue 
+                } catch { }
+            }
+            throw
         }
         
         # Verify the W: drive is available
@@ -235,9 +218,6 @@ function Convert-WindowsImageInternal {
             
             throw "Windows partition (W:) was not created or is not accessible after $maxRetries attempts"
         }
-        
-        # Clean up diskpart script
-        Remove-Item $scriptPath -Force -ErrorAction SilentlyContinue
         
         # Apply Windows image using DISM
         Write-Verbose "Applying Windows image using DISM"
@@ -315,21 +295,25 @@ function Convert-WindowsImageInternal {
             }
         }
         
-        # Detach VHDX
+        # Detach VHDX using PowerShell cmdlet
         Write-Verbose "Detaching VHDX"
-        $detachScript = @"
-select vdisk file="$VhdPath"
-detach vdisk
-"@
-        
-        $detachScriptPath = Join-Path $env:TEMP "hvtools_detach_$([guid]::NewGuid().ToString().Substring(0,8)).txt"
-        $detachScript | Out-File -FilePath $detachScriptPath -Encoding ASCII
-        
-        $detachResult = & diskpart /s $detachScriptPath
-        Write-Verbose "Detach result: $($detachResult -join "`n")"
-        
-        # Clean up detach script
-        Remove-Item $detachScriptPath -Force -ErrorAction SilentlyContinue
+        try {
+            Dismount-VHD -Path $VhdPath -ErrorAction Stop
+            Write-Verbose "VHDX detached successfully"
+        }
+        catch {
+            Write-Warning "Failed to detach VHDX: $_"
+            # Try alternative method using disk number if available
+            if ($diskNumber) {
+                try {
+                    Dismount-VHD -DiskNumber $diskNumber -ErrorAction Stop
+                    Write-Verbose "VHDX detached successfully using disk number"
+                }
+                catch {
+                    Write-Warning "Failed to detach VHDX using disk number: $_"
+                }
+            }
+        }
         
         # Verify VHDX was created
         if (Test-Path $VhdPath) {
