@@ -62,9 +62,6 @@ param (
     [Parameter(HelpMessage = "Recreate reference VHDX if it exists")]
     [switch]$Force,
     
-    [Parameter(HelpMessage = "Enable verbose output for debugging")]
-    [switch]$Verbose,
-    
     [Parameter(HelpMessage = "Enable debug output for detailed troubleshooting")]
     [switch]$Debug
 )
@@ -72,12 +69,11 @@ param (
 # Requires Administrator
 #Requires -RunAsAdministrator
 
-# Set verbose and debug preferences
-if ($Verbose) {
-    $VerbosePreference = 'Continue'
-}
+# Set debug preference (Verbose is handled automatically by CmdletBinding)
 if ($Debug) {
     $DebugPreference = 'Continue'
+    # Also enable verbose when debug is enabled
+    $VerbosePreference = 'Continue'
 }
 
 Write-Host "=== HVTools Reference Image Creator ===" -ForegroundColor Cyan
@@ -212,8 +208,8 @@ try {
     
     if ($PSCmdlet.ShouldProcess($ImageName, "Add image to configuration and create reference VHDX")) {
         try {
-            # Enable verbose output for Add-ImageToConfig if debug is enabled
-            if ($Debug -or $Verbose) {
+            # Enable verbose output for Add-ImageToConfig if debug is enabled or verbose is on
+            if ($Debug -or $VerbosePreference -eq 'Continue') {
                 $oldVerbosePreference = $VerbosePreference
                 $VerbosePreference = 'Continue'
             }
