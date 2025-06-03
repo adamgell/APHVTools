@@ -355,6 +355,26 @@ function New-ClientVM {
                 if ($PSCmdlet.ShouldProcess($vmParams.VMName, "Start VM")) {
                     Start-VM -Name $vmParams.VMName
                 }
+                
+                # Capture hardware hash if requested
+                if ($CaptureHardwareHash -and -not $WhatIfPreference) {
+                    Write-Host "Hardware hash capture requested for VM: $($vmParams.VMName)" -ForegroundColor Cyan
+                    Write-Host "Note: VM must complete OOBE before hardware hash can be captured." -ForegroundColor Yellow
+                    Write-Host "The hash will be saved to: $($vmParams.ClientPath)\.hvtools\HardwareHashes\" -ForegroundColor Yellow
+                    
+                    # Store VM info for later hash capture
+                    $vmHashInfo = @{
+                        VMName = $vmParams.VMName
+                        TenantPath = $vmParams.ClientPath
+                        SerialNumber = $vmSerial
+                    }
+                    
+                    # Add to list for batch processing after all VMs are created
+                    if (-not $script:vmHashCaptureList) {
+                        $script:vmHashCaptureList = @()
+                    }
+                    $script:vmHashCaptureList += $vmHashInfo
+                }
             }
         }
         else {
@@ -538,7 +558,7 @@ function New-ClientVM {
                         # Store VM info for later hash capture
                         $vmHashInfo = @{
                             VMName = $vmParams.VMName
-                            TenantPath = $clientPath
+                            TenantPath = $vmParams.ClientPath
                             SerialNumber = $vmSerial
                         }
                         
