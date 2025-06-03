@@ -1,18 +1,3 @@
-# Updated Get-AutopilotPolicy.ps1
-
-$requiredModules = @(
-    @{ModuleName = "Microsoft.Graph.Authentication"; MinimumVersion = "2.25.0" },
-    @{ModuleName = "Microsoft.Graph.DeviceManagement"; MinimumVersion = "2.25.0" },
-    @{ModuleName = "Microsoft.Graph.DeviceManagement.Enrollment"; MinimumVersion = "2.25.0" },
-    @{ModuleName = "Microsoft.Graph.Identity.DirectoryManagement"; MinimumVersion = "2.11.1" }
-)
-
-foreach ($module in $requiredModules) {
-    $imported = Import-RequiredModule -ModuleName $module.ModuleName -MinimumVersion $module.MinimumVersion -Install
-    if (-not $imported) {
-        throw "Failed to import required module: $($module.ModuleName)"
-    }
-}
 function Get-AutopilotPolicy {
     [cmdletbinding()]
     param (
@@ -20,6 +5,21 @@ function Get-AutopilotPolicy {
         [string]$FileDestination
     )
     try {
+        # Import required modules
+        $requiredModules = @(
+            @{ModuleName = "Microsoft.Graph.Authentication"; MinimumVersion = "2.25.0" },
+            @{ModuleName = "Microsoft.Graph.DeviceManagement"; MinimumVersion = "2.25.0" },
+            @{ModuleName = "Microsoft.Graph.DeviceManagement.Enrollment"; MinimumVersion = "2.25.0" },
+            @{ModuleName = "Microsoft.Graph.Identity.DirectoryManagement"; MinimumVersion = "2.11.1" }
+        )
+        
+        foreach ($module in $requiredModules) {
+            $imported = Import-RequiredModule -ModuleName $module.ModuleName -MinimumVersion $module.MinimumVersion -Install
+            if (-not $imported) {
+                throw "Failed to import required module: $($module.ModuleName)"
+            }
+        }
+        
         # Connect to Microsoft Graph with all required permissions
         Write-Verbose "Connecting to Microsoft Graph..."
         Connect-MgGraph -Scopes @(

@@ -15,12 +15,26 @@ if ($cfg) {
 #endregion
 
 #region Dot source the files
-foreach ($import in @($Public + $Private)) {
+# Load Import-RequiredModule first if it exists
+$importRequiredModule = $Private | Where-Object { $_.Name -eq 'Import-RequiredModule.ps1' }
+if ($importRequiredModule) {
     try {
-        . $import.FullName
+        . $importRequiredModule.FullName
     }
     catch {
-        Write-Error -Message "Failed to import function $($import.FullName): $_"
+        Write-Error -Message "Failed to import function $($importRequiredModule.FullName): $_"
+    }
+}
+
+# Load all other functions
+foreach ($import in @($Public + $Private)) {
+    if ($import.Name -ne 'Import-RequiredModule.ps1') {
+        try {
+            . $import.FullName
+        }
+        catch {
+            Write-Error -Message "Failed to import function $($import.FullName): $_"
+        }
     }
 }
 #endregion
