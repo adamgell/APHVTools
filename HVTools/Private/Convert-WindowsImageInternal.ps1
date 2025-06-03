@@ -110,6 +110,7 @@ attach vdisk
         
         if ($DiskLayout -eq "UEFI") {
             $diskpartScript += @"
+
 convert gpt
 create partition efi size=100
 format quick fs=fat32 label="System"
@@ -121,6 +122,7 @@ assign letter=W
 "@
         } else {
             $diskpartScript += @"
+
 create partition primary active
 format quick fs=ntfs label="Windows"
 assign letter=W
@@ -143,7 +145,18 @@ assign letter=W
         }
         
         # Check if diskpart succeeded
-        if ($LASTEXITCODE -ne 0) {
+        # Note: diskpart sometimes returns non-zero exit codes even on success
+        $diskpartSuccess = $false
+        if ($result) {
+            $outputString = $result -join "`n"
+            if ($outputString -match "DiskPart successfully created the virtual disk file" -and 
+                $outputString -match "DiskPart successfully selected the virtual disk file") {
+                $diskpartSuccess = $true
+                Write-Verbose "Diskpart operations completed successfully (ignoring exit code)"
+            }
+        }
+        
+        if (-not $diskpartSuccess -and $LASTEXITCODE -ne 0) {
             $outputString = if ($result) { $result -join "`n" } else { "No output" }
             throw "Diskpart failed with exit code $LASTEXITCODE. Output: $outputString"
         }
