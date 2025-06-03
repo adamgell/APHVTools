@@ -1,4 +1,46 @@
 function New-ClientVM {
+    <#
+    .SYNOPSIS
+        Creates new Hyper-V virtual machines with optional Autopilot configuration
+    
+    .DESCRIPTION
+        Creates one or more VMs for a specified tenant with Autopilot configuration injection.
+        Supports hardware hash capture for manual Autopilot registration.
+    
+    .PARAMETER TenantName
+        The name of the tenant to create VMs for
+    
+    .PARAMETER OSBuild
+        The OS image to use (overrides tenant default)
+    
+    .PARAMETER NumberOfVMs
+        Number of VMs to create (1-999)
+    
+    .PARAMETER CPUsPerVM
+        Number of CPU cores per VM (1-999)
+    
+    .PARAMETER VMMemory
+        Memory per VM in bytes (2GB-20GB)
+    
+    .PARAMETER SkipAutoPilot
+        Skip Autopilot configuration injection
+    
+    .PARAMETER IncludeTools
+        Include troubleshooting tools in VMs
+    
+    .PARAMETER CaptureHardwareHash
+        Capture hardware hash after VM creation for manual Autopilot registration
+    
+    .EXAMPLE
+        New-ClientVM -TenantName "Contoso" -NumberOfVMs 5 -CPUsPerVM 2
+        
+        Creates 5 VMs with 2 CPUs each
+    
+    .EXAMPLE
+        New-ClientVM -TenantName "Contoso" -NumberOfVMs 1 -CPUsPerVM 2 -CaptureHardwareHash
+        
+        Creates 1 VM and captures its hardware hash for Autopilot
+    #>
     [CmdletBinding(SupportsShouldProcess)]
     param (
         [parameter(Position = 1, Mandatory = $true)]
@@ -23,7 +65,10 @@ function New-ClientVM {
         [switch]$SkipAutoPilot,
 
         [parameter(Position = 7, Mandatory = $false)]
-        [switch]$IncludeTools
+        [switch]$IncludeTools,
+
+        [parameter(Position = 8, Mandatory = $false)]
+        [switch]$CaptureHardwareHash
     )
     try {
         Write-Verbose "Starting New-ClientVM function..."
@@ -483,10 +528,77 @@ function New-ClientVM {
                     if ($PSCmdlet.ShouldProcess($vmParams.VMName, "Start VM")) {
                         Start-VM -Name $vmParams.VMName
                     }
+                    
+                    # Capture hardware hash if requested
+                    if ($CaptureHardwareHash -and -not $WhatIfPreference) {
+                        Write-Host "Hardware hash capture requested for VM: $($vmParams.VMName)" -ForegroundColor Cyan
+                        Write-Host "Note: VM must complete OOBE before hardware hash can be captured." -ForegroundColor Yellow
+                        Write-Host "The hash will be saved to: $($vmParams.ClientPath)\.hvtools\HardwareHashes\" -ForegroundColor Yellow
+                        
+                        # Store VM info for later hash capture
+                        $vmHashInfo = @{
+                            VMName = $vmParams.VMName
+                            TenantPath = $clientPath
+                            SerialNumber = $vmSerial
+                        }
+                        
+                        # Add to list for batch processing after all VMs are created
+                        if (-not $script:vmHashCaptureList) {
+                            $script:vmHashCaptureList = @()
+                        }
+                        $script:vmHashCaptureList += $vmHashInfo
+                    }
                 }
             }
         }
         Write-Verbose "VM creation completed"
+        #endregion
+        
+        #region Hardware Hash Capture
+        if ($CaptureHardwareHash -and $script:vmHashCaptureList -and $script:vmHashCaptureList.Count -gt 0) {
+            Write-Host "`nPreparing to capture hardware hashes for $($script:vmHashCaptureList.Count) VM(s)..." -ForegroundColor Cyan
+            Write-Host "This process requires:" -ForegroundColor Yellow
+            Write-Host " 1. VMs must complete Windows OOBE (Out of Box Experience)" -ForegroundColor Yellow
+            Write-Host " 2. You must have credentials to access the VMs" -ForegroundColor Yellow
+            Write-Host " 3. The process will install Get-WindowsAutoPilotInfo script in each VM" -ForegroundColor Yellow
+            
+            $captureNow = Read-Host "`nDo you want to capture hardware hashes now? (Y/N)"
+            
+            if ($captureNow -eq 'Y' -or $captureNow -eq 'y') {
+                Write-Host "`nYou will be prompted for VM credentials once. These will be used for all VMs." -ForegroundColor Cyan
+                $vmCredential = Get-Credential -Message "Enter local administrator credentials for the VMs"
+                
+                foreach ($vmInfo in $script:vmHashCaptureList) {
+                    Write-Host "`nCapturing hardware hash for VM: $($vmInfo.VMName)" -ForegroundColor Green
+                    
+                    try {
+                        $hashFile = Get-VMHardwareHash -VMName $vmInfo.VMName `
+                                                       -TenantPath $vmInfo.TenantPath `
+                                                       -Credential $vmCredential
+                        
+                        if ($hashFile) {
+                            Write-Host "Successfully captured hardware hash for $($vmInfo.VMName)" -ForegroundColor Green
+                        } else {
+                            Write-Warning "Failed to capture hardware hash for $($vmInfo.VMName)"
+                        }
+                    }
+                    catch {
+                        Write-Warning "Error capturing hardware hash for $($vmInfo.VMName): $_"
+                    }
+                }
+                
+                Write-Host "`nHardware hash capture completed." -ForegroundColor Green
+                Write-Host "Hash files are saved in: <TenantPath>\.hvtools\HardwareHashes\" -ForegroundColor Cyan
+            }
+            else {
+                Write-Host "`nHardware hash capture skipped." -ForegroundColor Yellow
+                Write-Host "To capture hashes later, use the Get-VMHardwareHash function:" -ForegroundColor Cyan
+                Write-Host "  Get-VMHardwareHash -VMName 'VM-NAME' -TenantPath 'TENANT-PATH'" -ForegroundColor White
+            }
+            
+            # Clear the capture list
+            $script:vmHashCaptureList = @()
+        }
         #endregion
     }
     catch {
