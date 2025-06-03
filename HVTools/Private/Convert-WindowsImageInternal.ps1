@@ -141,21 +141,63 @@ function Convert-WindowsImageInternal {
             Write-Verbose "Diskpart completed with no output"
         }
         
-        # Check if diskpart succeeded
-        # Note: diskpart sometimes returns non-zero exit codes even on success
-        $diskpartSuccess = $false
-        if ($result) {
-            $outputString = $result -join "`n"
-            if ($outputString -match "DiskPart successfully created the virtual disk file" -and 
-                $outputString -match "DiskPart successfully selected the virtual disk file") {
-                $diskpartSuccess = $true
-                Write-Verbose "Diskpart operations completed successfully (ignoring exit code)"
-            }
-        }
+        # Check diskpart results and look for specific success/failure indicators
+        $outputString = if ($result) { $result -join "`n" } else { "No output" }
         
-        if (-not $diskpartSuccess -and $LASTEXITCODE -ne 0) {
-            $outputString = if ($result) { $result -join "`n" } else { "No output" }
-            throw "Diskpart failed with exit code $LASTEXITCODE. Output: $outputString"
+        # Check for various success indicators in the output
+        $vhdxCreated = $outputString -match "DiskPart successfully created the virtual disk file"
+        $vhdxSelected = $outputString -match "DiskPart successfully selected the virtual disk file"
+        $vhdxAttached = $outputString -match "DiskPart successfully attached the virtual disk file"
+        $partitionCreated = $outputString -match "DiskPart succeeded in creating the specified partition"
+        $volumeFormatted = $outputString -match "DiskPart successfully formatted the volume"
+        $letterAssigned = $outputString -match "DiskPart successfully assigned the drive letter"
+        
+        Write-Verbose "Diskpart operation results:"
+        Write-Verbose "  VHDX created: $vhdxCreated"
+        Write-Verbose "  VHDX selected: $vhdxSelected"
+        Write-Verbose "  VHDX attached: $vhdxAttached"
+        Write-Verbose "  Partition created: $partitionCreated"
+        Write-Verbose "  Volume formatted: $volumeFormatted"
+        Write-Verbose "  Drive letter assigned: $letterAssigned"
+        
+        # If we didn't get past attaching, there's a fundamental problem
+        if (-not $vhdxAttached) {
+            Write-Warning "VHDX was not successfully attached. Full diskpart output:"
+            Write-Warning $outputString
+            
+            # Try alternative approach - use PowerShell cmdlets to complete the operation
+            Write-Verbose "Attempting to complete VHDX setup using PowerShell cmdlets..."
+            try {
+                # Mount the VHDX
+                $vhdx = Mount-VHD -Path $VhdPath -Passthru
+                $diskNumber = $vhdx.Number
+                
+                # Initialize and partition the disk
+                Initialize-Disk -Number $diskNumber -PartitionStyle GPT -PassThru | Out-Null
+                
+                if ($DiskLayout -eq "UEFI") {
+                    # Create EFI partition
+                    New-Partition -DiskNumber $diskNumber -Size 100MB -GptType '{c12a7328-f81f-11d2-ba4b-00a0c93ec93b}' -DriveLetter S | 
+                        Format-Volume -FileSystem FAT32 -NewFileSystemLabel "System" -Confirm:$false | Out-Null
+                    
+                    # Create MSR partition
+                    New-Partition -DiskNumber $diskNumber -Size 16MB -GptType '{e3c9e316-0b5c-4db8-817d-f92df00215ae}' | Out-Null
+                    
+                    # Create Windows partition
+                    New-Partition -DiskNumber $diskNumber -UseMaximumSize -DriveLetter W | 
+                        Format-Volume -FileSystem NTFS -NewFileSystemLabel "Windows" -Confirm:$false | Out-Null
+                } else {
+                    # BIOS layout
+                    New-Partition -DiskNumber $diskNumber -UseMaximumSize -IsActive -DriveLetter W | 
+                        Format-Volume -FileSystem NTFS -NewFileSystemLabel "Windows" -Confirm:$false | Out-Null
+                }
+                
+                Write-Verbose "Successfully set up VHDX using PowerShell cmdlets"
+            }
+            catch {
+                Write-Error "Failed to set up VHDX using PowerShell cmdlets: $_"
+                throw
+            }
         }
         
         # Verify the W: drive is available
@@ -311,6 +353,20 @@ detach vdisk
             }
             catch {
                 Write-Warning "Failed to dismount ISO: $_"
+            }
+        }
+        
+        # If we failed and the VHDX is still mounted, try to dismount it
+        if (-not $result -and (Test-Path $VhdPath)) {
+            try {
+                $mountedVhd = Get-VHD -Path $VhdPath -ErrorAction SilentlyContinue
+                if ($mountedVhd -and $mountedVhd.Attached) {
+                    Write-Verbose "Dismounting VHDX due to error: $VhdPath"
+                    Dismount-VHD -Path $VhdPath -ErrorAction SilentlyContinue
+                }
+            }
+            catch {
+                Write-Warning "Failed to dismount VHDX: $_"
             }
         }
     }
