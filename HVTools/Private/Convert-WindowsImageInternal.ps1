@@ -133,14 +133,19 @@ assign letter=W
         
         Write-Verbose "Executing diskpart script: $scriptPath"
         Write-Verbose "Diskpart script content:"
-        Write-Verbose ($diskpartScript -split "`n" | ForEach-Object { "  $_" }) -join "`n"
+        $diskpartScript -split "`n" | ForEach-Object { Write-Verbose "  $_" }
         
         $result = & diskpart /s $scriptPath
-        Write-Verbose "Diskpart result: $($result -join "`n")"
+        if ($result) {
+            Write-Verbose "Diskpart result: $($result -join "`n")"
+        } else {
+            Write-Verbose "Diskpart completed with no output"
+        }
         
         # Check if diskpart succeeded
         if ($LASTEXITCODE -ne 0) {
-            throw "Diskpart failed with exit code $LASTEXITCODE. Output: $($result -join "`n")"
+            $outputString = if ($result) { $result -join "`n" } else { "No output" }
+            throw "Diskpart failed with exit code $LASTEXITCODE. Output: $outputString"
         }
         
         # Verify the W: drive is available
@@ -186,7 +191,8 @@ assign letter=W
                     $logContent = "Could not read DISM log: $_"
                 }
             }
-            throw "DISM apply failed with exit code $LASTEXITCODE.`nDISM Output: $($dismResult -join "`n")`nLast 20 lines of DISM log:`n$logContent"
+            $dismOutputString = if ($dismResult) { $dismResult -join "`n" } else { "No DISM output" }
+            throw "DISM apply failed with exit code $LASTEXITCODE.`nDISM Output: $dismOutputString`nLast 20 lines of DISM log:`n$logContent"
         }
         
         Write-Verbose "DISM apply completed successfully"
