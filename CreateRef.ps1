@@ -60,14 +60,40 @@ param (
     [string]$WorkspacePath,
     
     [Parameter(HelpMessage = "Recreate reference VHDX if it exists")]
-    [switch]$Force
+    [switch]$Force,
+    
+    [Parameter(HelpMessage = "Enable verbose output for debugging")]
+    [switch]$Verbose,
+    
+    [Parameter(HelpMessage = "Enable debug output for detailed troubleshooting")]
+    [switch]$Debug
 )
 
 # Requires Administrator
 #Requires -RunAsAdministrator
 
+# Set verbose and debug preferences
+if ($Verbose) {
+    $VerbosePreference = 'Continue'
+}
+if ($Debug) {
+    $DebugPreference = 'Continue'
+}
+
 Write-Host "=== HVTools Reference Image Creator ===" -ForegroundColor Cyan
 Write-Host "Creating reference VHDX from: $IsoPath" -ForegroundColor Green
+
+# Show debug information if requested
+if ($Debug) {
+    Write-Host "`n=== Debug Information ===" -ForegroundColor Magenta
+    Write-Host "PowerShell Version: $($PSVersionTable.PSVersion)" -ForegroundColor Gray
+    Write-Host "OS Version: $([System.Environment]::OSVersion.VersionString)" -ForegroundColor Gray
+    Write-Host "Current User: $($env:USERNAME)" -ForegroundColor Gray
+    Write-Host "Working Directory: $(Get-Location)" -ForegroundColor Gray
+    $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
+    Write-Host "Running as Admin: $isAdmin" -ForegroundColor $(if($isAdmin){'Green'}else{'Red'})
+    Write-Host "=========================" -ForegroundColor Magenta
+}
 
 try {
     # Import HVTools module
@@ -158,8 +184,75 @@ try {
     Write-Host "`n[4/5] Adding image to HVTools configuration..." -ForegroundColor Yellow
     Write-Host "Note: This will prompt for Windows edition selection and then create the reference VHDX" -ForegroundColor Cyan
     
+    if ($Debug) {
+        Write-Host "`nDEBUG - Before Add-ImageToConfig:" -ForegroundColor Magenta
+        Write-Host "  Image Name: $ImageName" -ForegroundColor Gray
+        Write-Host "  ISO Path: $IsoPath" -ForegroundColor Gray
+        Write-Host "  ISO Exists: $(Test-Path $IsoPath)" -ForegroundColor Gray
+        Write-Host "  ISO Size: $([math]::Round((Get-Item $IsoPath).Length / 1GB, 2)) GB" -ForegroundColor Gray
+        
+        # Check Hyper-ConvertImage module status
+        $hyperConvertModule = Get-Module -Name Hyper-ConvertImage
+        if ($hyperConvertModule) {
+            Write-Host "  Hyper-ConvertImage Module: Loaded" -ForegroundColor Green
+            Write-Host "  Module Path: $($hyperConvertModule.Path)" -ForegroundColor Gray
+        } else {
+            Write-Host "  Hyper-ConvertImage Module: NOT loaded" -ForegroundColor Red
+        }
+        
+        # Check Convert-WindowsImage availability
+        $convertCmd = Get-Command Convert-WindowsImage -ErrorAction SilentlyContinue
+        if ($convertCmd) {
+            Write-Host "  Convert-WindowsImage: Available" -ForegroundColor Green
+            Write-Host "  Command Source: $($convertCmd.Source)" -ForegroundColor Gray
+        } else {
+            Write-Host "  Convert-WindowsImage: NOT available" -ForegroundColor Red
+        }
+    }
+    
     if ($PSCmdlet.ShouldProcess($ImageName, "Add image to configuration and create reference VHDX")) {
-        Add-ImageToConfig -ImageName $ImageName -IsoPath $IsoPath
+        try {
+            # Enable verbose output for Add-ImageToConfig if debug is enabled
+            if ($Debug -or $Verbose) {
+                $oldVerbosePreference = $VerbosePreference
+                $VerbosePreference = 'Continue'
+            }
+            
+            Add-ImageToConfig -ImageName $ImageName -IsoPath $IsoPath
+            
+            if ($Debug) {
+                Write-Host "`nDEBUG - After Add-ImageToConfig attempt:" -ForegroundColor Magenta
+                # Check if the image was added to config
+                $updatedConfig = Get-HVToolsConfig -Raw -ErrorAction SilentlyContinue
+                $addedImage = $updatedConfig.images | Where-Object { $_.imageName -eq $ImageName }
+                if ($addedImage) {
+                    Write-Host "  Image added to config: YES" -ForegroundColor Green
+                    Write-Host "  Expected VHDX path: $($addedImage.refImagePath)" -ForegroundColor Gray
+                    Write-Host "  VHDX exists: $(Test-Path $addedImage.refImagePath)" -ForegroundColor $(if(Test-Path $addedImage.refImagePath){'Green'}else{'Red'})
+                } else {
+                    Write-Host "  Image added to config: NO" -ForegroundColor Red
+                }
+            }
+        }
+        catch {
+            Write-Host "`nERROR in Add-ImageToConfig:" -ForegroundColor Red
+            Write-Host "  Message: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host "  Exception Type: $($_.Exception.GetType().FullName)" -ForegroundColor Red
+            
+            if ($_.Exception.InnerException) {
+                Write-Host "  Inner Exception: $($_.Exception.InnerException.Message)" -ForegroundColor Red
+            }
+            
+            Write-Host "  Stack Trace:" -ForegroundColor Red
+            Write-Host $_.ScriptStackTrace -ForegroundColor DarkRed
+            
+            throw
+        }
+        finally {
+            if ($oldVerbosePreference) {
+                $VerbosePreference = $oldVerbosePreference
+            }
+        }
     }
     
     # Verify creation

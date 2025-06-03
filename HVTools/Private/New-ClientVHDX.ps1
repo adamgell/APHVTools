@@ -64,7 +64,59 @@ function New-ClientVHDX {
             Write-Verbose "Using unattend.xml: $UnattendPath"
         }
         Write-Host "Building reference image.." -ForegroundColor Cyan -NoNewline
-        Convert-WindowsImage @params
+        
+        # Add detailed debugging for Convert-WindowsImage
+        Write-Verbose "Convert-WindowsImage parameters:"
+        foreach ($key in $params.Keys) {
+            Write-Verbose "  $key = $($params[$key])"
+        }
+        
+        try {
+            # Check if Convert-WindowsImage command is available
+            $convertCmd = Get-Command Convert-WindowsImage -ErrorAction SilentlyContinue
+            if (-not $convertCmd) {
+                throw "Convert-WindowsImage command not found. Ensure Hyper-ConvertImage module is properly loaded."
+            }
+            
+            Write-Verbose "Convert-WindowsImage command found at: $($convertCmd.Source)"
+            Write-Verbose "Starting Windows image conversion..."
+            
+            # Enable detailed error reporting
+            $oldErrorActionPreference = $ErrorActionPreference
+            $ErrorActionPreference = 'Stop'
+            
+            Convert-WindowsImage @params
+            
+            Write-Verbose "Windows image conversion completed successfully"
+        }
+        catch {
+            Write-Host " FAILED" -ForegroundColor Red
+            Write-Host "Error in Convert-WindowsImage:" -ForegroundColor Red
+            Write-Host "  Message: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host "  Exception Type: $($_.Exception.GetType().FullName)" -ForegroundColor Red
+            
+            if ($_.Exception.InnerException) {
+                Write-Host "  Inner Exception: $($_.Exception.InnerException.Message)" -ForegroundColor Red
+            }
+            
+            # Additional debugging information
+            Write-Host "Debug Information:" -ForegroundColor Yellow
+            Write-Host "  PowerShell Version: $($PSVersionTable.PSVersion)" -ForegroundColor Yellow
+            Write-Host "  Module Path: $((Get-Module Hyper-ConvertImage).Path)" -ForegroundColor Yellow
+            Write-Host "  Current Directory: $(Get-Location)" -ForegroundColor Yellow
+            
+            # Check if files exist
+            Write-Host "  Source ISO exists: $(Test-Path $params.SourcePath)" -ForegroundColor Yellow
+            Write-Host "  Target directory exists: $(Test-Path (Split-Path $params.VhdPath -Parent))" -ForegroundColor Yellow
+            
+            # Re-throw the error
+            throw
+        }
+        finally {
+            if ($oldErrorActionPreference) {
+                $ErrorActionPreference = $oldErrorActionPreference
+            }
+        }
     }
     catch {
         Write-Warning $_
