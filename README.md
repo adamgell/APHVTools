@@ -1,99 +1,380 @@
 # HVTools
 
-## Summary
+[![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-blue.svg)](https://github.com/PowerShell/PowerShell)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-A set of tools to assist with the creation of Intune managed virtual machines in Hyper-V.
+A PowerShell module for automating the creation and management of Intune-managed virtual machines in Hyper-V. HVTools streamlines the process of creating test/development VMs that are pre-configured for Windows Autopilot enrollment.
 
-This is very heavily based on [Intune.HV.Tools](https://github.com/tabs-not-spaces/Intune.HV.Tools).
+## Features
 
-## How to use
+- 🚀 **Automated VM Creation**: Create multiple VMs with a single command
+- 🏢 **Multi-Tenant Support**: Manage VMs for different organizations
+- 💾 **Windows Image Management**: Handle ISO images and reference VHDX files
+- 🔧 **Autopilot Integration**: Automatically fetch and inject Autopilot configuration
+- 🌐 **Network Configuration**: Configure virtual networks and VLAN settings
+- 🛠️ **Troubleshooting Tools**: Option to include diagnostic tools in VMs
+- 📊 **Bulk Operations**: Create and manage multiple VMs efficiently
 
-### Install the module
+## Table of Contents
 
-``` PowerShell
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Usage](#usage)
+  - [Initialize Workspace](#initialize-workspace)
+  - [Add Windows Images](#add-windows-images)
+  - [Configure Tenants](#configure-tenants)
+  - [Setup Networking](#setup-networking)
+  - [Create Virtual Machines](#create-virtual-machines)
+- [Advanced Usage](#advanced-usage)
+- [Configuration](#configuration)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [License](#license)
+- [Acknowledgments](#acknowledgments)
+
+## Requirements
+
+### System Requirements
+- Windows 10/11 Pro, Enterprise, or Education (with Hyper-V support)
+- Windows Server 2016/2019/2022
+- PowerShell 5.1 or higher
+- Hyper-V role enabled
+- At least 16GB RAM (recommended: 32GB+ for multiple VMs)
+- Sufficient disk space for VMs (50GB+ per VM recommended)
+
+### Required PowerShell Modules
+The following modules will be automatically installed if missing:
+- `Microsoft.Graph.Authentication` (v2.0.0+)
+- `Microsoft.Graph.DeviceManagement` (v2.0.0+)
+- `Microsoft.Graph.DeviceManagement.Enrollment` (v2.0.0+)
+- `Hyper-ConvertImage` (v10.2+)
+- `WindowsAutoPilotIntune` (v4.3+)
+- `Microsoft.Graph.Intune` (v6.1907.1.0+)
+
+### Permissions Required
+- Local administrator rights
+- Hyper-V administrator permissions
+- Microsoft Intune administrator role (for Autopilot configuration)
+
+## Installation
+
+### From PowerShell Gallery (Recommended)
+
+```powershell
+# Install for current user
 Install-Module -Name HVTools -Scope CurrentUser
+
+# Or install for all users (requires admin rights)
+Install-Module -Name HVTools -Scope AllUsers
 ```
 
-### Add images to the environment
+### From Source
 
-Add ISO Image to environment
+```powershell
+# Clone the repository
+git clone https://github.com/adamgell/HVTools.git
+cd HVTools
 
-``` PowerShell
-Add-ImageToConfig -ImageName "2004" -IsoPath "C:\Path\To\Win10-2004.iso"
+# Build and import the module
+./build.ps1 -modulePath ./HVTools -buildLocal
+Import-Module ./HVTools/HVTools.psd1 -Force
 ```
 
-OR Add existing VHDX to environment
+## Quick Start
 
-``` PowerShell
-Add-ImageToConfig -ImageName "2004" -ReferenceVHDX "c:\Path\To\ref10.vhdx"
+```powershell
+# 1. Import the module
+Import-Module HVTools
+
+# 2. Initialize workspace
+Initialize-HVTools -Path "C:\HVTools-Workspace"
+
+# 3. Add a Windows image
+Add-ImageToConfig -ImageName "Win11-23H2" -IsoPath "C:\ISOs\Windows11_23H2.iso"
+
+# 4. Add a tenant
+Add-TenantToConfig -TenantName "Contoso" -AdminUpn "admin@contoso.com" -ImageName "Win11-23H2"
+
+# 5. Configure network
+Add-NetworkToConfig -VSwitchName "Default Switch"
+
+# 6. Create VMs
+New-ClientVM -TenantName "Contoso" -NumberOfVMs 5 -CPUsPerVM 2 -VMMemory 4GB
 ```
 
-You can add as many images to the environment as you want.
+## Usage
 
-If you want to build different reference images based on different editions (Pro, Ent, Edu) make the image name unique and use the same path to the image media.
+### Initialize Workspace
 
-The name doesn't need to reflect the Build of win10, but it helps to keep things standardized.
+Before using HVTools, initialize a workspace where VMs and configurations will be stored:
 
-``` PowerShell
-Add-ImageToConfig -ImageName "2004edu" -IsoPath "C:\Path\To\Win10-2004.iso"
-Add-ImageToConfig -ImageName "2004pro" -IsoPath "C:\Path\To\Win10-2004.iso"
-Add-ImageToConfig -ImageName "2004ent" -IsoPath "C:\Path\To\Win10-2004.iso"
+```powershell
+Initialize-HVTools -Path "C:\HVTools-Workspace"
 ```
 
-During this process the reference image will be created. You will be asked to select an edition to build with.
+This creates the necessary folder structure and configuration files.
 
-### Add tenants to the environment
+### Add Windows Images
 
-``` PowerShell
-Add-TenantToConfig -TenantName 'MegaCorp' -ImageName 2004 -AdminUpn 'intune-admin@megacorp.com'
+Add Windows ISO images to your environment:
+
+```powershell
+# Add Windows 11 ISO
+Add-ImageToConfig -ImageName "Win11-23H2" -IsoPath "C:\ISOs\Windows11_23H2.iso"
+
+# Add Windows 10 ISO
+Add-ImageToConfig -ImageName "Win10-22H2" -IsoPath "C:\ISOs\Windows10_22H2.iso"
+
+# Add existing reference VHDX
+Add-ImageToConfig -ImageName "Win11-Custom" -ReferenceVHDX "C:\VHDXs\Win11-Reference.vhdx"
 ```
 
-You can add as many tenants to the environment as you want. The <code>ImageName</code> parameter auto-completes to the available images from your environment.
+During ISO import, you'll be prompted to select the Windows edition (Pro, Enterprise, Education).
 
-The ImageName provides the ability to set a default reference image per tenant, however this can be overwritten during creation.
+### Configure Tenants
 
-### Add virtual networking to the environment
+Add tenant configurations for different organizations:
 
-``` PowerShell
-Add-NetworkToConfig -VSwitchName 'Default Switch'
+```powershell
+# Add a tenant with default image
+Add-TenantToConfig -TenantName "Contoso" -AdminUpn "admin@contoso.com" -ImageName "Win11-23H2"
+
+# Add another tenant
+Add-TenantToConfig -TenantName "Fabrikam" -AdminUpn "admin@fabrikam.com" -ImageName "Win10-22H2"
+
+# View all configured tenants
+Get-HVToolsConfig | Select-Object -ExpandProperty tenantConfig
 ```
 
-<code>VSwitchName</code> autocompletes to the available virtual switches already created in your Hyper-V environment. At the moment you can only have one network config in your environment.
+### Setup Networking
 
-### Get HV.Tools configuration
+Configure virtual network settings:
 
-``` PowerShell
+```powershell
+# Use existing virtual switch
+Add-NetworkToConfig -VSwitchName "Default Switch"
+
+# Configure with VLAN
+Add-NetworkToConfig -VSwitchName "External Switch" -VlanId 100
+```
+
+### Create Virtual Machines
+
+Create VMs with various configurations:
+
+```powershell
+# Create 5 standard VMs
+New-ClientVM -TenantName "Contoso" -NumberOfVMs 5 -CPUsPerVM 2 -VMMemory 4GB
+
+# Create VMs with specific OS build
+New-ClientVM -TenantName "Contoso" -OSBuild "Win11-23H2" -NumberOfVMs 3 -CPUsPerVM 4 -VMMemory 8GB
+
+# Create VMs without Autopilot
+New-ClientVM -TenantName "Fabrikam" -NumberOfVMs 2 -CPUsPerVM 2 -VMMemory 4GB -SkipAutoPilot
+
+# Create VMs with troubleshooting tools
+New-ClientVM -TenantName "Contoso" -NumberOfVMs 1 -CPUsPerVM 2 -VMMemory 4GB -IncludeTools
+```
+
+## Advanced Usage
+
+### Adding Troubleshooting Tools
+
+Include diagnostic tools in your VMs:
+
+```powershell
+# Add tools to configuration
+Add-ToolsToConfig -ToolsPath "C:\DiagTools"
+
+# Get configured tools
+Get-ToolsFromConfig
+
+# Create VM with tools included
+New-ClientVM -TenantName "Contoso" -NumberOfVMs 1 -CPUsPerVM 2 -VMMemory 4GB -IncludeTools
+```
+
+### Working with Multiple Windows Editions
+
+Create different reference images from the same ISO:
+
+```powershell
+# Add multiple editions from same ISO
+Add-ImageToConfig -ImageName "Win11-Pro" -IsoPath "C:\ISOs\Windows11.iso"
+Add-ImageToConfig -ImageName "Win11-Enterprise" -IsoPath "C:\ISOs\Windows11.iso"
+Add-ImageToConfig -ImageName "Win11-Education" -IsoPath "C:\ISOs\Windows11.iso"
+```
+
+### Bulk Operations
+
+Create large numbers of VMs efficiently:
+
+```powershell
+# Create 50 VMs in batches
+1..5 | ForEach-Object {
+    New-ClientVM -TenantName "Contoso" -NumberOfVMs 10 -CPUsPerVM 2 -VMMemory 4GB
+    Start-Sleep -Seconds 30  # Pause between batches
+}
+```
+
+### Using WhatIf
+
+Test commands before execution:
+
+```powershell
+# Preview VM creation
+New-ClientVM -TenantName "Contoso" -NumberOfVMs 5 -CPUsPerVM 2 -VMMemory 4GB -WhatIf
+
+# Preview configuration changes
+Add-TenantToConfig -TenantName "Test" -AdminUpn "admin@test.com" -ImageName "Win11-23H2" -WhatIf
+```
+
+## Configuration
+
+### Configuration File Location
+
+HVTools stores its configuration at: `$env:USERPROFILE\.hvtoolscfgpath`
+
+### Configuration Structure
+
+```json
+{
+  "vmPath": "C:\\HVTools-Workspace\\VMs",
+  "referenceVHDXPath": "C:\\HVTools-Workspace\\ReferenceVHDX",
+  "tenantConfig": [
+    {
+      "tenantName": "Contoso",
+      "adminUpn": "admin@contoso.com",
+      "imageName": "Win11-23H2",
+      "pathToConfig": "C:\\HVTools-Workspace\\Contoso"
+    }
+  ],
+  "networkConfig": {
+    "vSwitchName": "Default Switch",
+    "vlanId": null
+  },
+  "images": [
+    {
+      "imageName": "Win11-23H2",
+      "imagePath": "C:\\ISOs\\Windows11_23H2.iso",
+      "imageIndex": 3,
+      "refVHDX": "C:\\HVTools-Workspace\\ReferenceVHDX\\Win11-23H2.vhdx"
+    }
+  ]
+}
+```
+
+### Viewing Configuration
+
+```powershell
+# View full configuration
 Get-HVToolsConfig
+
+# View specific sections
+Get-HVToolsConfig | Select-Object -ExpandProperty tenantConfig
+Get-HVToolsConfig | Select-Object -ExpandProperty images
+Get-HVToolsConfig | Select-Object -ExpandProperty networkConfig
 ```
 
-Allows you to access the environment configuration file.
+## Troubleshooting
 
-### Create a virtual machine
+### Common Issues
 
-``` PowerShell
-New-ClientVM -TenantName 'Powers-Hell' -OSBuild 2004 -NumberOfVMs 10 -CPUsPerVM 2 -VMMemory 8gb
+#### 1. Module Import Failures
+```powershell
+# Force reload the module
+Remove-Module HVTools -Force -ErrorAction SilentlyContinue
+Import-Module HVTools -Force
+
+# Check for missing dependencies
+Get-Module -ListAvailable | Where-Object Name -like "*Graph*"
 ```
 
-The example above will create 10 VMs using the reference image from the environment config named '2004' with 2 CPUs per VM and 8gb of ram.
-<code>TenantName</code> autocompletes from the list of tenants in your environment.
-<code>OSBuild</code> autocompletes from the list of images in your environment.
+#### 2. VM Creation Failures
+```powershell
+# Check Hyper-V service
+Get-Service vmms | Select-Object Status
 
-Reference images are now created in the "Add-ImageToConfig" stage, but if you've deleted the reference image or if the image can't be found, it will be created at this point. You will be asked which edition you want to use for the reference image.
+# Verify virtual switch exists
+Get-VMSwitch
 
-Once the reference image is created, the VM will be built using it. The Autopilot configuration json will be captured at this stage. This step will prompt the user for authentication using the AD Authentication Library from within the Microsoft.Graph.Intune module.
-
-Once this Autopilot configuration is captured locally, you will not be required to authenticate again. If you want to change the Autopilot configuration, simply delete it from the tenant folder within your HV.Tools local environment.
-
-### Create a virtual machine without Autopilot offline injection
-
-``` PowerShell
-New-ClientVM -TenantName 'Powers-Hell' -OSBuild 2004 -NumberOfVMs 10 -CPUsPerVM 2 -VMMemory 8gb -SkipAutopilot
+# Check available disk space
+Get-PSDrive C | Select-Object Used, Free
 ```
 
-Exactly the same as the previous step. Using the parameter <code>SkipAutopilot</code> allows you to build VMs without injecting the Autopilot configuration file into the *.VHDX.
+#### 3. Autopilot Configuration Issues
+```powershell
+# Test Graph API connectivity
+Connect-MgGraph -Scopes "DeviceManagementServiceConfig.Read.All"
 
-## Caveat Emptor
+# Manually fetch Autopilot policy
+Get-AutopilotPolicy
+```
 
-I'm providing this solution as a tool as an educational tool to assist the IT-Pro community with absolutely ZERO warranties or guarantees - I know it works for me, but if it doesn't for you - read the code and fix it..
+#### 4. Reference VHDX Issues
+```powershell
+# Verify reference VHDX exists
+Test-Path (Get-HVToolsConfig).referenceVHDXPath
 
-If you find a problem and want to contribute - please do! I love community involvement and will be as active as my schedule allows.
+# Check VHDX file integrity
+Get-VHD -Path "path\to\reference.vhdx"
+```
+
+### Debug Mode
+
+Enable verbose output for troubleshooting:
+
+```powershell
+# Enable verbose output
+$VerbosePreference = "Continue"
+
+# Run command with verbose
+New-ClientVM -TenantName "Contoso" -NumberOfVMs 1 -CPUsPerVM 2 -VMMemory 4GB -Verbose
+
+# Disable verbose output
+$VerbosePreference = "SilentlyContinue"
+```
+
+### Log Files
+
+HVTools creates log files in the tenant folders:
+- Location: `C:\HVTools-Workspace\<TenantName>\Logs\`
+- Format: `HVTools_<timestamp>.log`
+
+## Contributing
+
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+### Development Setup
+
+```powershell
+# Clone the repository
+git clone https://github.com/adamgell/HVTools.git
+cd HVTools
+
+# Build locally
+./build.ps1 -modulePath ./HVTools -buildLocal
+
+# Import for testing
+Import-Module ./HVTools/HVTools.psd1 -Force
+```
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- This project is heavily based on [Intune.HV.Tools](https://github.com/tabs-not-spaces/Intune.HV.Tools) by Ben Reader
+- Thanks to the PowerShell and Hyper-V communities for their continuous support
+- Special thanks to all contributors who have helped improve this module
+
+## Support
+
+- 📝 [Report Issues](https://github.com/adamgell/HVTools/issues)
+- 📖 [Documentation](https://github.com/adamgell/HVTools/wiki)
+- 💬 [Discussions](https://github.com/adamgell/HVTools/discussions)
+
+---
+
+**Note**: This module is provided as-is with no warranties. Always test in a non-production environment first.
