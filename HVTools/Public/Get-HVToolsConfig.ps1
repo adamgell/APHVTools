@@ -68,13 +68,20 @@ function Get-HVToolsConfig {
             Write-Host "---- Image Configuration ----" -ForegroundColor Green
             if ($script:hvConfig.images -and $script:hvConfig.images.Count -gt 0) {
                 $imageTable = $script:hvConfig.images | ForEach-Object {
+                    $isoBasename = Split-Path $_.imagePath -Leaf
+                    $isoDirectory = Split-Path $_.imagePath -Parent
+                    
+                    # Truncate directory path if too long, keeping the beginning
+                    $displayDirectory = if ($isoDirectory.Length -gt 30) {
+                        $isoDirectory.Substring(0, 27) + "..."
+                    } else {
+                        $isoDirectory
+                    }
+                    
                     [PSCustomObject]@{
                         ImageName = $_.imageName
-                        ISOPath = if ($_.imagePath.Length -gt 50) { 
-                            "..." + $_.imagePath.Substring($_.imagePath.Length - 47) 
-                        } else { 
-                            $_.imagePath 
-                        }
+                        ISODirectory = $displayDirectory
+                        ISOFile = $isoBasename
                         RefVHDX = Split-Path $_.refImagePath -Leaf
                     }
                 }
