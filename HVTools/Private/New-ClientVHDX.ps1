@@ -14,16 +14,11 @@ function New-ClientVHDX {
 
     )
     try {
-        $module = Get-Module -ListAvailable -Name 'Hyper-ConvertImage'
-        if ($module.count -lt 1) {
-            Install-Module -Name 'Hyper-ConvertImage'
-            $module = Get-Module -ListAvailable -Name 'Hyper-ConvertImage'
-        }
-        if ($PSVersionTable.PSVersion.Major -eq 7) {
-            Import-Module -Name (Split-Path $module.ModuleBase -Parent) -UseWindowsPowerShell -ErrorAction SilentlyContinue 3>$null
-        }
-        else {
-            Import-Module -Name 'Hyper-ConvertImage'
+        # Import Hyper-ConvertImage module efficiently
+        $useWinPS = $PSVersionTable.PSVersion.Major -eq 7
+        $imported = Import-RequiredModule -ModuleName 'Hyper-ConvertImage' -Install -UseWindowsPowerShell:$useWinPS
+        if (-not $imported) {
+            throw "Failed to import required module: Hyper-ConvertImage"
         }
         $currVol = Get-Volume
         Mount-DiskImage -ImagePath $winIso | Out-Null

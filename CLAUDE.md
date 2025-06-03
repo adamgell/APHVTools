@@ -22,6 +22,7 @@ HVTools automates the creation and management of Intune-managed virtual machines
 - Create new private function: Add to `/HVTools/Private/` directory
 - Update module version: Handled automatically by build.ps1
 - Generate release notes: `git log --pretty=format:"- %s" > HVTools/ReleaseNotes.txt`
+- Commit and push to origin each time you finish a file
 
 ## Architecture and Key Components
 

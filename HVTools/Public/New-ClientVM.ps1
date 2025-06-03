@@ -30,9 +30,12 @@ function New-ClientVM {
 
         #region Config
         Write-Verbose "Entering Config region..."
-        #pre-load HV module..
-        Write-Verbose "Loading Hyper-V module..."
-        Get-Command -Module 'Hyper-V' | Out-Null
+        #pre-load HV module efficiently
+        Write-Verbose "Ensuring Hyper-V module is loaded..."
+        $hvImported = Import-RequiredModule -ModuleName 'Hyper-V'
+        if (-not $hvImported) {
+            throw "Hyper-V module is required but could not be loaded. Ensure Hyper-V feature is installed."
+        }
         Write-Verbose "Getting client details for tenant: $TenantName"
         $clientDetails = $script:hvConfig.tenantConfig | Where-Object { $_.TenantName -eq $TenantName }
         Write-Verbose "Client details found: $($null -ne $clientDetails)"

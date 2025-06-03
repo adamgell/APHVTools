@@ -8,14 +8,9 @@ $requiredModules = @(
 )
 
 foreach ($module in $requiredModules) {
-    if (-not (Get-Module -ListAvailable -Name $module.ModuleName | Where-Object { $_.Version -ge [version]$module.MinimumVersion })) {
-        Write-Host "Installing $($module.ModuleName)..."
-        Install-Module -Name $module.ModuleName -MinimumVersion $module.MinimumVersion -Force -AllowClobber
-    }
-
-    if (-not (Get-Module -Name $module.ModuleName)) {
-        Write-Host "Importing $($module.ModuleName)..."
-        Import-Module -Name $module.ModuleName -MinimumVersion $module.MinimumVersion -Force
+    $imported = Import-RequiredModule -ModuleName $module.ModuleName -MinimumVersion $module.MinimumVersion -Install
+    if (-not $imported) {
+        throw "Failed to import required module: $($module.ModuleName)"
     }
 }
 function Get-AutopilotPolicy {
