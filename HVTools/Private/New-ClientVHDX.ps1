@@ -1,4 +1,3 @@
-#requires -Modules "Hyper-ConvertImage"
 function New-ClientVHDX {
     [cmdletbinding(SupportsShouldProcess)]
     param
@@ -17,25 +16,7 @@ function New-ClientVHDX {
 
     )
     try {
-        # Try to import Hyper-ConvertImage module
-        try {
-            Import-Module Hyper-ConvertImage -Force -ErrorAction Stop
-            Write-Verbose "Successfully imported Hyper-ConvertImage module"
-        }
-        catch {
-            Write-Warning "Failed to import Hyper-ConvertImage module directly: $_"
-            
-            # Try with Import-RequiredModule helper if available
-            if (Get-Command Import-RequiredModule -ErrorAction SilentlyContinue) {
-                Write-Verbose "Attempting import with Import-RequiredModule helper..."
-                $imported = Import-RequiredModule -ModuleName 'Hyper-ConvertImage' -Install
-                if (-not $imported) {
-                    throw "Failed to import required module: Hyper-ConvertImage using both methods"
-                }
-            } else {
-                throw "Hyper-ConvertImage module import failed and Import-RequiredModule helper not available"
-            }
-        }
+        Write-Verbose "Using integrated Convert-WindowsImageInternal function (no external dependencies)"
         
         # Create unattend.xml if CreateAdminAccount is specified
         $tempUnattendPath = $null
@@ -58,11 +39,26 @@ function New-ClientVHDX {
             }
         }
         
-        $currVol = Get-Volume
-        Mount-DiskImage -ImagePath $winIso | Out-Null
-        $dl = (Get-Volume | Where-Object { $_.DriveLetter -notin $currVol.DriveLetter}).DriveLetter
-        $imageIndex = Get-ImageIndexFromWim -wimPath "$dl`:\sources\install.wim"
-        Dismount-DiskImage -ImagePath $winIso | Out-Null
+        # Get Windows edition index from ISO/WIM
+        $sourceExt = [System.IO.Path]::GetExtension($winIso).ToLower()
+        if ($sourceExt -eq ".iso") {
+            # Mount ISO temporarily to get edition index
+            $currVol = Get-Volume
+            Mount-DiskImage -ImagePath $winIso | Out-Null
+            try {
+                $dl = (Get-Volume | Where-Object { $_.DriveLetter -notin $currVol.DriveLetter }).DriveLetter
+                $wimPath = "$dl`:\sources\install.wim"
+                $imageIndex = Get-ImageIndexFromWim -wimPath $wimPath
+            }
+            finally {
+                Dismount-DiskImage -ImagePath $winIso | Out-Null
+            }
+        } else {
+            # Direct WIM file
+            $imageIndex = Get-ImageIndexFromWim -wimPath $winIso
+        }
+        
+        # Prepare parameters for our internal Convert-WindowsImageInternal function
         $params = @{
             SourcePath = $winIso
             Edition    = $imageIndex
@@ -76,96 +72,29 @@ function New-ClientVHDX {
             $params.UnattendPath = $UnattendPath
             Write-Verbose "Using unattend.xml: $UnattendPath"
         }
+        
         Write-Host "Building reference image.." -ForegroundColor Cyan -NoNewline
         
-        # Add detailed debugging for Convert-WindowsImage
-        Write-Verbose "Convert-WindowsImage parameters:"
+        # Log parameters for debugging
+        Write-Verbose "Convert-WindowsImageInternal parameters:"
         foreach ($key in $params.Keys) {
             Write-Verbose "  $key = $($params[$key])"
         }
         
         try {
-            # Check if Convert-WindowsImage command is available
-            $convertCmd = Get-Command Convert-WindowsImage -ErrorAction SilentlyContinue
-            if (-not $convertCmd) {
-                throw "Convert-WindowsImage command not found. Ensure Hyper-ConvertImage module is properly loaded."
-            }
+            # Use our integrated function instead of external module
+            $result = Convert-WindowsImageInternal @params
             
-            Write-Verbose "Convert-WindowsImage command found at: $($convertCmd.Source)"
-            Write-Verbose "Starting Windows image conversion..."
-            
-            # Additional pre-execution diagnostics
-            Write-Verbose "Pre-execution diagnostics:"
-            Write-Verbose "  PowerShell Version: $($PSVersionTable.PSVersion)"
-            Write-Verbose "  Execution Policy: $(Get-ExecutionPolicy)"
-            Write-Verbose "  Current User: $($env:USERNAME)"
-            Write-Verbose "  Running as Admin: $(([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] 'Administrator'))"
-            Write-Verbose "  Module Base: $((Get-Module Hyper-ConvertImage).ModuleBase)"
-            Write-Verbose "  .NET Framework: $([System.Runtime.InteropServices.RuntimeInformation]::FrameworkDescription)"
-            
-            # Check critical paths and permissions
-            $targetDir = Split-Path $params.VhdPath -Parent
-            if (-not (Test-Path $targetDir)) {
-                Write-Verbose "Creating target directory: $targetDir"
-                New-Item -Path $targetDir -ItemType Directory -Force | Out-Null
-            }
-            
-            # Test write permissions
-            $testFile = Join-Path $targetDir "hvtools_test_$([guid]::NewGuid().ToString().Substring(0,8)).tmp"
-            try {
-                "test" | Out-File -FilePath $testFile -Force
-                Remove-Item $testFile -Force
-                Write-Verbose "  Write permissions to target directory: OK"
-            }
-            catch {
-                Write-Warning "Limited write permissions to target directory: $_"
-            }
-            
-            # Enable detailed error reporting
-            $oldErrorActionPreference = $ErrorActionPreference
-            $ErrorActionPreference = 'Stop'
-            
-            # Immediate pre-execution diagnostics
-            Write-Host "About to execute Convert-WindowsImage..." -ForegroundColor Cyan
-            Write-Host "Module info: $((Get-Module Hyper-ConvertImage | Select-Object Name, Version, ModuleBase))" -ForegroundColor Gray
-            
-            # Try to inspect the Convert-WindowsImage function
-            try {
-                $convertFunc = Get-Command Convert-WindowsImage
-                Write-Host "Function type: $($convertFunc.CommandType)" -ForegroundColor Gray
-                Write-Host "Function source: $($convertFunc.Source)" -ForegroundColor Gray
-            } catch {
-                Write-Host "Cannot inspect Convert-WindowsImage: $_" -ForegroundColor Red
-            }
-            
-            try {
-                Convert-WindowsImage @params
-                Write-Verbose "Windows image conversion completed successfully"
-            }
-            catch {
-                # Check if the error is the non-fatal "Cannot add type" compilation error
-                if ($_.Exception.Message -like "*Cannot add type*Compilation errors occurred*") {
-                    Write-Warning "Convert-WindowsImage generated compilation warnings, but continuing..."
-                    Write-Verbose "Non-fatal compilation error: $($_.Exception.Message)"
-                    
-                    # Check if VHDX was actually created despite the error
-                    if (Test-Path $params.VhdPath) {
-                        Write-Host " completed with warnings" -ForegroundColor Yellow
-                        Write-Verbose "VHDX file was created successfully despite compilation warnings"
-                        return
-                    } else {
-                        Write-Host " FAILED - no VHDX created" -ForegroundColor Red
-                        throw "VHDX creation failed - file not found: $($params.VhdPath)"
-                    }
-                } else {
-                    # Re-throw other errors
-                    throw
-                }
+            if ($result -and (Test-Path $vhdxPath)) {
+                Write-Host " completed successfully" -ForegroundColor Green
+                Write-Verbose "VHDX created: $($result.FullName) ($([math]::Round($result.Length/1GB, 2)) GB)"
+            } else {
+                throw "VHDX creation failed - no file created"
             }
         }
         catch {
             Write-Host " FAILED" -ForegroundColor Red
-            Write-Host "Error in Convert-WindowsImage:" -ForegroundColor Red
+            Write-Host "Error in Convert-WindowsImageInternal:" -ForegroundColor Red
             Write-Host "  Message: $($_.Exception.Message)" -ForegroundColor Red
             Write-Host "  Exception Type: $($_.Exception.GetType().FullName)" -ForegroundColor Red
             
@@ -176,8 +105,6 @@ function New-ClientVHDX {
             # Enhanced debugging information
             Write-Host "Enhanced Debug Information:" -ForegroundColor Yellow
             Write-Host "  PowerShell Version: $($PSVersionTable.PSVersion)" -ForegroundColor Yellow
-            Write-Host "  Module Version: $((Get-Module Hyper-ConvertImage).Version)" -ForegroundColor Yellow
-            Write-Host "  Module Path: $((Get-Module Hyper-ConvertImage).Path)" -ForegroundColor Yellow
             Write-Host "  Current Directory: $(Get-Location)" -ForegroundColor Yellow
             Write-Host "  Source ISO exists: $(Test-Path $params.SourcePath)" -ForegroundColor Yellow
             Write-Host "  Source ISO size: $([math]::Round((Get-Item $params.SourcePath).Length / 1GB, 2)) GB" -ForegroundColor Yellow
@@ -191,28 +118,19 @@ function New-ClientVHDX {
             }
             
             Write-Host "`nSuggested Solutions:" -ForegroundColor Cyan
-            Write-Host "1. Try running: Import-Module Hyper-ConvertImage -Force" -ForegroundColor White
-            Write-Host "2. Restart PowerShell as Administrator" -ForegroundColor White
-            Write-Host "3. Check Windows ADK installation" -ForegroundColor White
-            Write-Host "4. Try a smaller VHDX size (e.g., 60GB instead of 127GB)" -ForegroundColor White
+            Write-Host "1. Restart PowerShell as Administrator" -ForegroundColor White
+            Write-Host "2. Check Windows ADK/DISM installation" -ForegroundColor White
+            Write-Host "3. Try a smaller VHDX size (e.g., 60GB instead of 127GB)" -ForegroundColor White
+            Write-Host "4. Ensure no other processes are using the target drive" -ForegroundColor White
             
             # Re-throw the error
             throw
-        }
-        finally {
-            if ($oldErrorActionPreference) {
-                $ErrorActionPreference = $oldErrorActionPreference
-            }
         }
     }
     catch {
         Write-Warning $_
     }
     finally {
-        if ($PSVersionTable.PSVersion.Major -eq 7) {
-            Remove-Module -Name 'Hyper-ConvertImage' -Force
-        }
-        
         # Clean up temporary unattend.xml
         if ($tempUnattendPath -and (Test-Path $tempUnattendPath)) {
             Remove-Item $tempUnattendPath -Force -ErrorAction SilentlyContinue
