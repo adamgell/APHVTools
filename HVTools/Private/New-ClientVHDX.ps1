@@ -125,6 +125,19 @@ function New-ClientVHDX {
             $oldErrorActionPreference = $ErrorActionPreference
             $ErrorActionPreference = 'Stop'
             
+            # Immediate pre-execution diagnostics
+            Write-Host "About to execute Convert-WindowsImage..." -ForegroundColor Cyan
+            Write-Host "Module info: $((Get-Module Hyper-ConvertImage | Select-Object Name, Version, ModuleBase))" -ForegroundColor Gray
+            
+            # Try to inspect the Convert-WindowsImage function
+            try {
+                $convertFunc = Get-Command Convert-WindowsImage
+                Write-Host "Function type: $($convertFunc.CommandType)" -ForegroundColor Gray
+                Write-Host "Function source: $($convertFunc.Source)" -ForegroundColor Gray
+            } catch {
+                Write-Host "Cannot inspect Convert-WindowsImage: $_" -ForegroundColor Red
+            }
+            
             Convert-WindowsImage @params
             
             Write-Verbose "Windows image conversion completed successfully"
