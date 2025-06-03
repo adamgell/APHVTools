@@ -103,7 +103,7 @@ function Convert-WindowsImageInternal {
         # Create VHDX using diskpart
         Write-Verbose "Creating VHDX file using diskpart"
         $diskpartScript = @"
-create vdisk file="$VhdPath" maximum=$([math]::Round($SizeBytes/1MB)) type=$($VhdType.ToLower())
+create vdisk file="$VhdPath" maximum=$([math]::Round($SizeBytes/1MB)) type=$(if($VhdType -eq 'Dynamic'){'expandable'}else{'fixed'})
 select vdisk file="$VhdPath"
 attach vdisk
 "@
