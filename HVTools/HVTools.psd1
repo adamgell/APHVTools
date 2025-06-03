@@ -72,6 +72,7 @@
     FunctionsToExport = @(
         'Initialize-HVTools',
         'Get-HVToolsConfig',
+        'Show-HVToolsConfig',
         'Add-ImageToConfig',
         'Add-NetworkToConfig',
         'Add-TenantToConfig',
