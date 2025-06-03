@@ -102,32 +102,29 @@ function Convert-WindowsImageInternal {
         
         # Create VHDX using diskpart
         Write-Verbose "Creating VHDX file using diskpart"
-        $diskpartScript = @"
-create vdisk file="$VhdPath" maximum=$([math]::Round($SizeBytes/1MB)) type=$(if($VhdType -eq 'Dynamic'){'expandable'}else{'fixed'})
-select vdisk file="$VhdPath"
-attach vdisk
-"@
+        
+        # Build diskpart script line by line
+        $diskpartCommands = @()
+        $diskpartCommands += "create vdisk file=`"$VhdPath`" maximum=$([math]::Round($SizeBytes/1MB)) type=$(if($VhdType -eq 'Dynamic'){'expandable'}else{'fixed'})"
+        $diskpartCommands += "select vdisk file=`"$VhdPath`""
+        $diskpartCommands += "attach vdisk"
         
         if ($DiskLayout -eq "UEFI") {
-            $diskpartScript += @"
-
-convert gpt
-create partition efi size=100
-format quick fs=fat32 label="System"
-assign letter=S
-create partition msr size=16
-create partition primary
-format quick fs=ntfs label="Windows"
-assign letter=W
-"@
+            $diskpartCommands += "convert gpt"
+            $diskpartCommands += "create partition efi size=100"
+            $diskpartCommands += "format quick fs=fat32 label=`"System`""
+            $diskpartCommands += "assign letter=S"
+            $diskpartCommands += "create partition msr size=16"
+            $diskpartCommands += "create partition primary"
+            $diskpartCommands += "format quick fs=ntfs label=`"Windows`""
+            $diskpartCommands += "assign letter=W"
         } else {
-            $diskpartScript += @"
-
-create partition primary active
-format quick fs=ntfs label="Windows"
-assign letter=W
-"@
+            $diskpartCommands += "create partition primary active"
+            $diskpartCommands += "format quick fs=ntfs label=`"Windows`""
+            $diskpartCommands += "assign letter=W"
         }
+        
+        $diskpartScript = $diskpartCommands -join "`r`n"
         
         # Execute diskpart
         $scriptPath = Join-Path $env:TEMP "hvtools_diskpart_$([guid]::NewGuid().ToString().Substring(0,8)).txt"
@@ -162,11 +159,40 @@ assign letter=W
         }
         
         # Verify the W: drive is available
-        Start-Sleep -Seconds 2  # Give time for drive to be available
-        if (-not (Test-Path "W:\")) {
-            throw "Windows partition (W:) was not created or is not accessible"
+        Write-Verbose "Waiting for W: drive to become available..."
+        $maxRetries = 10
+        $retryCount = 0
+        $driveReady = $false
+        
+        while ($retryCount -lt $maxRetries -and -not $driveReady) {
+            Start-Sleep -Seconds 2
+            $retryCount++
+            
+            # Check if W: drive exists
+            $wDrive = Get-PSDrive -Name W -ErrorAction SilentlyContinue
+            if ($wDrive) {
+                Write-Verbose "W: drive found, verifying accessibility..."
+                if (Test-Path "W:\") {
+                    $driveReady = $true
+                    Write-Verbose "Windows partition (W:) is accessible"
+                } else {
+                    Write-Verbose "W: drive exists but not accessible yet (attempt $retryCount/$maxRetries)"
+                }
+            } else {
+                Write-Verbose "W: drive not found yet (attempt $retryCount/$maxRetries)"
+                
+                # Try to refresh drive list
+                Get-PSDrive | Out-Null
+            }
         }
-        Write-Verbose "Windows partition (W:) is accessible"
+        
+        if (-not $driveReady) {
+            # List available drives for debugging
+            Write-Verbose "Available drives:"
+            Get-PSDrive -PSProvider FileSystem | ForEach-Object { Write-Verbose "  $($_.Name): $($_.Root)" }
+            
+            throw "Windows partition (W:) was not created or is not accessible after $maxRetries attempts"
+        }
         
         # Clean up diskpart script
         Remove-Item $scriptPath -Force -ErrorAction SilentlyContinue
