@@ -18,6 +18,7 @@
 - [x] Add Show-HVToolsConfig for detailed configuration views
 - [x] Make Import-Module only import if needed (created Import-RequiredModule helper)
 - [x] Fix module import order issue
+- [x] Created CreateRef.ps1 standalone script for reference image creation
 
 ## Future Enhancements
 - [ ] Add parallel VM creation support
