@@ -138,9 +138,30 @@ function New-ClientVHDX {
                 Write-Host "Cannot inspect Convert-WindowsImage: $_" -ForegroundColor Red
             }
             
-            Convert-WindowsImage @params
-            
-            Write-Verbose "Windows image conversion completed successfully"
+            try {
+                Convert-WindowsImage @params
+                Write-Verbose "Windows image conversion completed successfully"
+            }
+            catch {
+                # Check if the error is the non-fatal "Cannot add type" compilation error
+                if ($_.Exception.Message -like "*Cannot add type*Compilation errors occurred*") {
+                    Write-Warning "Convert-WindowsImage generated compilation warnings, but continuing..."
+                    Write-Verbose "Non-fatal compilation error: $($_.Exception.Message)"
+                    
+                    # Check if VHDX was actually created despite the error
+                    if (Test-Path $params.VhdPath) {
+                        Write-Host " completed with warnings" -ForegroundColor Yellow
+                        Write-Verbose "VHDX file was created successfully despite compilation warnings"
+                        return
+                    } else {
+                        Write-Host " FAILED - no VHDX created" -ForegroundColor Red
+                        throw "VHDX creation failed - file not found: $($params.VhdPath)"
+                    }
+                } else {
+                    # Re-throw other errors
+                    throw
+                }
+            }
         }
         catch {
             Write-Host " FAILED" -ForegroundColor Red
