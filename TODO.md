@@ -1,13 +1,16 @@
 # HVTools TODO List
 
-## In Progress
+## In Progress  
 - [x] Add -CaptureHardwareHash switch to New-ClientVM
   - [x] Add switch parameter to New-ClientVM
   - [x] Install Get-WindowsAutoPilotInfo script in VM
   - [x] Capture hardware hash and save to tenant folder
   - [x] Name file according to VM serial number
   - [x] Pull file back to host in tenant folder under .hvtools
-  - [ ] Test the functionality
+  - [x] Create unattend.xml with random local admin account
+  - [x] Inject admin account during reference image creation
+  - [x] Auto-use injected credentials for hash capture
+  - [ ] Test the complete functionality
 
 ## Completed
 - [x] Add argument completers for all HVTools cmdlet parameters

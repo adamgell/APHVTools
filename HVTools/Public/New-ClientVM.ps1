@@ -119,7 +119,7 @@ function New-ClientVM {
         if (!(Test-Path -Path $imageDetails.refImagePath -ErrorAction SilentlyContinue)) {
             if ($PSCmdlet.ShouldProcess($imageDetails.refImagePath, "Create reference Autopilot VHDX")) {
                 Write-Host "Creating reference Autopilot VHDX - this may take some time.." -ForegroundColor Yellow
-                New-ClientVHDX -vhdxPath $imageDetails.refImagePath -winIso $imageDetails.imagePath
+                New-ClientVHDX -vhdxPath $imageDetails.refImagePath -winIso $imageDetails.imagePath -CreateAdminAccount:$CaptureHardwareHash
                 Write-Host "Reference Autopilot VHDX has been created.." -ForegroundColor Yellow
             }
         }
@@ -585,8 +585,17 @@ function New-ClientVM {
             $captureNow = Read-Host "`nDo you want to capture hardware hashes now? (Y/N)"
             
             if ($captureNow -eq 'Y' -or $captureNow -eq 'y') {
-                Write-Host "`nYou will be prompted for VM credentials once. These will be used for all VMs." -ForegroundColor Cyan
-                $vmCredential = Get-Credential -Message "Enter local administrator credentials for the VMs"
+                # Check if we have stored VM admin credentials from image creation
+                $vmCredential = $null
+                if ($script:vmAdminCredentials) {
+                    Write-Host "`nUsing injected admin credentials from VM creation..." -ForegroundColor Green
+                    $securePassword = ConvertTo-SecureString $script:vmAdminCredentials.Password -AsPlainText -Force
+                    $vmCredential = New-Object System.Management.Automation.PSCredential($script:vmAdminCredentials.Username, $securePassword)
+                    Write-Host "Admin Username: $($script:vmAdminCredentials.Username)" -ForegroundColor Cyan
+                } else {
+                    Write-Host "`nYou will be prompted for VM credentials once. These will be used for all VMs." -ForegroundColor Cyan
+                    $vmCredential = Get-Credential -Message "Enter local administrator credentials for the VMs"
+                }
                 
                 foreach ($vmInfo in $script:vmHashCaptureList) {
                     Write-Host "`nCapturing hardware hash for VM: $($vmInfo.VMName)" -ForegroundColor Green
