@@ -21,7 +21,7 @@ function Get-MountedVMDisk {
     )
     
     try {
-        Write-LogEntry -Message "Checking for mounted VHDX files" -Severity 1
+        Write-LogEntry -Message "Checking for mounted VHDX files" -Type Information
         
         # Get all mounted VHDX files
         $mountedDisks = Get-VHD | Where-Object { $_.Attached -eq $true }
@@ -134,13 +134,13 @@ function Get-MountedVMDisk {
         foreach ($disk in $toDismount) {
             try {
                 if ($PSCmdlet.ShouldProcess($disk.Path, "Dismount VHDX")) {
-                    Write-LogEntry -Message "Dismounting VHDX: $($disk.Path)" -Severity 1
+                    Write-LogEntry -Message "Dismounting VHDX: $($disk.Path)" -Type Information
                     Dismount-VHD -Path $disk.Path -ErrorAction Stop
                     Write-Host "Successfully dismounted: $($disk.VMName)" -ForegroundColor Green
                 }
             }
             catch {
-                Write-LogEntry -Message "Error dismounting $($disk.Path): $_" -Severity 3
+                Write-LogEntry -Message "Error dismounting $($disk.Path): $_" -Type Error
                 Write-Host "Error dismounting $($disk.VMName): $_" -ForegroundColor Red
             }
         }
@@ -148,7 +148,7 @@ function Get-MountedVMDisk {
         Write-Host "`nDismount operation completed." -ForegroundColor Green
     }
     catch {
-        Write-LogEntry -Message "Error in Get-MountedVMDisk: $_" -Severity 3
+        Write-LogEntry -Message "Error in Get-MountedVMDisk: $_" -Type Error
         throw
     }
 }
