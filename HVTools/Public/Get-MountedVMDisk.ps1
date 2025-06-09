@@ -23,8 +23,26 @@ function Get-MountedVMDisk {
     try {
         Write-Verbose "Checking for mounted VHDX files"
         
-        # Get all mounted VHDX files
-        $mountedDisks = Get-VHD | Where-Object { $_.Attached -eq $true }
+        # Get all mounted VHDX files by checking disk information
+        # We need to get all disks and filter for VHDX files
+        $mountedDisks = @()
+        
+        # Get all disks
+        $allDisks = Get-Disk | Where-Object { $_.Location -like "*.vhd*" }
+        
+        foreach ($disk in $allDisks) {
+            try {
+                # Try to get VHD info for this disk
+                $vhdInfo = Get-VHD -DiskNumber $disk.Number -ErrorAction SilentlyContinue
+                if ($vhdInfo -and $vhdInfo.Attached) {
+                    $mountedDisks += $vhdInfo
+                }
+            }
+            catch {
+                # Skip disks that aren't VHDs
+                continue
+            }
+        }
         
         if (-not $mountedDisks) {
             Write-Host "No mounted VHDX files found." -ForegroundColor Green
