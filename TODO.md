@@ -36,3 +36,7 @@
 - Hardware hash capture requires Get-WindowsAutoPilotInfo script from PowerShell Gallery
 - Hardware hash files should be named: `<SerialNumber>_hwid.csv`
 - Files should be stored in: `<TenantPath>\.hvtools\HardwareHashes\`
+
+
+## Adam's List
+- [ ] Make a public function to call a VM and mount its disk. Then make another function that checks for mounted disks and gives the option to dismount them via a numbered menu. 
