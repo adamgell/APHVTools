@@ -23,65 +23,49 @@ function Get-MountedVMDisk {
     try {
         Write-Verbose "Checking for mounted VHDX files"
         
-        # Get all mounted VHDX files by checking disk information
-        # We need to get all disks and filter for VHDX files
+        # Get all mounted VHDX files by enumerating disks and checking for VHDs
         $mountedDisks = @()
         
-        # Method 1: Try to get VHDs directly using Get-VHD
-        try {
-            Write-Verbose "Attempting to enumerate VHDs directly with Get-VHD"
-            $allVHDs = Get-VHD -ErrorAction Stop
-            $attachedVHDs = $allVHDs | Where-Object { $_.Attached -eq $true }
-            
-            if ($attachedVHDs) {
-                Write-Verbose "Found $($attachedVHDs.Count) attached VHD(s) using Get-VHD"
-                $mountedDisks += $attachedVHDs
+        # Enumerate all disks and check each one for VHD properties
+        # Get all disks - don't filter by Location as it might be empty for some VHD types
+        $allDisks = Get-Disk
+        
+        foreach ($disk in $allDisks) {
+            try {
+                # Check multiple properties to identify potential VHDs
+                $isPotentialVHD = $false
+                
+                # Check Location property (might work for some VHDs)
+                if ($disk.Location -like "*.vhd*" -or $disk.Location -like "*.avhd*") {
+                    $isPotentialVHD = $true
+                    Write-Verbose "Disk $($disk.Number) has VHD location: $($disk.Location)"
+                }
+                
+                # Check BusType - VHDs often show as 'File Backed Virtual'
+                if ($disk.BusType -eq 'File Backed Virtual') {
+                    $isPotentialVHD = $true
+                    Write-Verbose "Disk $($disk.Number) has File Backed Virtual bus type"
+                }
+                
+                # Check FriendlyName/Model for Virtual disk indicators
+                if ($disk.FriendlyName -like "*Virtual*" -or $disk.Model -like "*Virtual*") {
+                    $isPotentialVHD = $true
+                    Write-Verbose "Disk $($disk.Number) has Virtual in name/model"
+                }
+                
+                if ($isPotentialVHD) {
+                    # Try to get VHD info for this disk
+                    $vhdInfo = Get-VHD -DiskNumber $disk.Number -ErrorAction Stop
+                    if ($vhdInfo -and $vhdInfo.Attached) {
+                        Write-Verbose "Confirmed disk $($disk.Number) is an attached VHD: $($vhdInfo.Path)"
+                        $mountedDisks += $vhdInfo
+                    }
+                }
             }
-        }
-        catch {
-            Write-Verbose "Get-VHD failed, falling back to disk enumeration: $_"
-            
-            # Method 2: Fallback - enumerate all disks and check each one
-            # Get all disks - don't filter by Location as it might be empty for some VHD types
-            $allDisks = Get-Disk
-            
-            foreach ($disk in $allDisks) {
-                try {
-                    # Check multiple properties to identify potential VHDs
-                    $isPotentialVHD = $false
-                    
-                    # Check Location property (might work for some VHDs)
-                    if ($disk.Location -like "*.vhd*" -or $disk.Location -like "*.avhd*") {
-                        $isPotentialVHD = $true
-                        Write-Verbose "Disk $($disk.Number) has VHD location: $($disk.Location)"
-                    }
-                    
-                    # Check BusType - VHDs often show as 'File Backed Virtual'
-                    if ($disk.BusType -eq 'File Backed Virtual') {
-                        $isPotentialVHD = $true
-                        Write-Verbose "Disk $($disk.Number) has File Backed Virtual bus type"
-                    }
-                    
-                    # Check FriendlyName/Model for Virtual disk indicators
-                    if ($disk.FriendlyName -like "*Virtual*" -or $disk.Model -like "*Virtual*") {
-                        $isPotentialVHD = $true
-                        Write-Verbose "Disk $($disk.Number) has Virtual in name/model"
-                    }
-                    
-                    if ($isPotentialVHD) {
-                        # Try to get VHD info for this disk
-                        $vhdInfo = Get-VHD -DiskNumber $disk.Number -ErrorAction Stop
-                        if ($vhdInfo -and $vhdInfo.Attached) {
-                            Write-Verbose "Confirmed disk $($disk.Number) is an attached VHD: $($vhdInfo.Path)"
-                            $mountedDisks += $vhdInfo
-                        }
-                    }
-                }
-                catch {
-                    # This disk is not a VHD or we can't access it
-                    Write-Verbose "Could not get VHD info for disk $($disk.Number): $_"
-                    continue
-                }
+            catch {
+                # This disk is not a VHD or we can't access it
+                Write-Verbose "Could not get VHD info for disk $($disk.Number): $_"
+                continue
             }
         }
         
