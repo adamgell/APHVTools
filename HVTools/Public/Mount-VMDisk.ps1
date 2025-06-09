@@ -26,7 +26,7 @@ function Mount-VMDisk {
     )
     
     try {
-        Write-LogEntry -Message "Attempting to mount disk for VM: $VMName" -Type Information
+        Write-Verbose "Attempting to mount disk for VM: $VMName"
         
         # Get the VM
         $vm = Get-VM -Name $VMName -ErrorAction Stop
@@ -53,7 +53,7 @@ function Mount-VMDisk {
             throw "VHDX file not found at path: $vhdxPath"
         }
         
-        Write-LogEntry -Message "Mounting VHDX: $vhdxPath" -Type Information
+        Write-Verbose "Mounting VHDX: $vhdxPath"
         
         if ($PSCmdlet.ShouldProcess($vhdxPath, "Mount VHDX")) {
             # Mount the VHDX and get the drive letter
@@ -76,7 +76,7 @@ function Mount-VMDisk {
             }
             
             if ($driveLetter) {
-                Write-LogEntry -Message "VHDX mounted successfully at drive $driveLetter`:" -Type Information
+                Write-Host "VHDX mounted successfully at drive $driveLetter`:" -ForegroundColor Green
                 
                 # Return an object with mount information
                 [PSCustomObject]@{
@@ -88,7 +88,7 @@ function Mount-VMDisk {
                 }
             }
             else {
-                Write-LogEntry -Message "VHDX mounted but no drive letter assigned" -Type Information
+                Write-Warning "VHDX mounted but no drive letter assigned"
                 
                 # Return mount info without drive letter
                 [PSCustomObject]@{
@@ -102,7 +102,7 @@ function Mount-VMDisk {
         }
     }
     catch {
-        Write-LogEntry -Message "Error mounting VM disk: $_" -Type Error
+        Write-Error "Error mounting VM disk: $_"
         throw
     }
 }
