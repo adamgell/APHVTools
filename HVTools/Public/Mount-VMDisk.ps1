@@ -4,17 +4,23 @@ function Mount-VMDisk {
         Mounts a VM's disk for access from the host system
     .DESCRIPTION
         Mounts a VM's VHDX disk file and returns the drive letter where it was mounted.
-        The VM must be stopped before mounting its disk.
+        The VM must be stopped before mounting its disk. If the VM is running, you will
+        be prompted to shut it down, or use -Force to automatically shut it down.
     .PARAMETER VMName
         Name of the VM whose disk should be mounted
     .PARAMETER DiskNumber
         The disk number to mount (default is 0 for the primary disk)
+    .PARAMETER Force
+        Automatically shut down the VM if it's running without prompting
     .EXAMPLE
         Mount-VMDisk -VMName "Client01"
         Mounts the primary disk of VM "Client01" and returns the drive letter
     .EXAMPLE
         Mount-VMDisk -VMName "Client01" -DiskNumber 1
         Mounts the second disk of VM "Client01"
+    .EXAMPLE
+        Mount-VMDisk -VMName "Client01" -Force
+        Mounts the primary disk of VM "Client01", automatically shutting it down if needed
     #>
     [CmdletBinding(SupportsShouldProcess)]
     param (
@@ -22,7 +28,10 @@ function Mount-VMDisk {
         [string]$VMName,
         
         [Parameter(Mandatory = $false)]
-        [int]$DiskNumber = 0
+        [int]$DiskNumber = 0,
+        
+        [Parameter(Mandatory = $false)]
+        [switch]$Force
     )
     
     try {
@@ -33,7 +42,49 @@ function Mount-VMDisk {
         
         # Check if VM is running
         if ($vm.State -ne 'Off') {
-            throw "VM '$VMName' must be stopped before mounting its disk. Current state: $($vm.State)"
+            Write-Warning "VM '$VMName' is currently $($vm.State). It must be stopped before mounting its disk."
+            
+            # Check if Force parameter is used or ask user
+            $shouldShutdown = $Force
+            
+            if (-not $Force) {
+                $response = Read-Host "Would you like to shut down the VM? (Y/N)"
+                $shouldShutdown = ($response -eq 'Y' -or $response -eq 'y')
+            }
+            
+            if ($shouldShutdown) {
+                Write-Host "Shutting down VM '$VMName'..." -ForegroundColor Yellow
+                
+                # Try graceful shutdown first
+                Stop-VM -Name $VMName -Force -ErrorAction Stop
+                
+                # Wait for VM to shut down
+                $timeout = 60 # seconds
+                $elapsed = 0
+                $checkInterval = 2
+                
+                Write-Host "Waiting for VM to shut down" -NoNewline -ForegroundColor Yellow
+                
+                while ((Get-VM -Name $VMName).State -ne 'Off' -and $elapsed -lt $timeout) {
+                    Write-Host "." -NoNewline -ForegroundColor Yellow
+                    Start-Sleep -Seconds $checkInterval
+                    $elapsed += $checkInterval
+                }
+                
+                Write-Host "" # New line
+                
+                # Check final state
+                $vm = Get-VM -Name $VMName
+                if ($vm.State -ne 'Off') {
+                    throw "VM '$VMName' failed to shut down within $timeout seconds. Current state: $($vm.State)"
+                }
+                
+                Write-Host "VM '$VMName' has been shut down successfully." -ForegroundColor Green
+            }
+            else {
+                Write-Host "Operation cancelled. VM must be stopped before mounting its disk." -ForegroundColor Yellow
+                return
+            }
         }
         
         # Get the VM's hard drives

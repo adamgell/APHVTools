@@ -21,6 +21,7 @@
 - [x] Created CreateRef.ps1 standalone script for reference image creation
 
 ## Future Enhancements
+- [ ] Fix Write-LogEntry implementation - needs $script:logFile initialization in module
 - [ ] Add parallel VM creation support
 - [ ] Add VM template support
 - [ ] Add support for custom unattend.xml
