@@ -130,6 +130,21 @@ $toolsCompleter = {
         }
 }
 
+# VM Name Completer
+$vmNameCompleter = {
+    param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
+    
+    Get-VM -Name "$wordToComplete*" -ErrorAction SilentlyContinue |
+        ForEach-Object {
+            [System.Management.Automation.CompletionResult]::new(
+                $_.Name,
+                $_.Name,
+                'ParameterValue',
+                "VM: $($_.Name) - State: $($_.State)"
+            )
+        }
+}
+
 # Register completers for TenantName parameters
 Register-ArgumentCompleter -CommandName 'New-ClientVM' -ParameterName 'TenantName' -ScriptBlock $tenantNameCompleter
 Register-ArgumentCompleter -CommandName 'Show-HVToolsConfig' -ParameterName 'TenantName' -ScriptBlock $tenantNameCompleter
@@ -144,5 +159,8 @@ Register-ArgumentCompleter -CommandName 'Add-NetworkToConfig' -ParameterName 'VS
 
 # Register completers for ToolNames parameters
 Register-ArgumentCompleter -CommandName 'Add-ToolsToConfig' -ParameterName 'ToolNames' -ScriptBlock $toolsCompleter
+
+# Register completers for VMName parameters
+Register-ArgumentCompleter -CommandName 'Mount-VMDisk' -ParameterName 'VMName' -ScriptBlock $vmNameCompleter
 
 #endregion

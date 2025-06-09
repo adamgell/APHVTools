@@ -19,10 +19,6 @@ function Mount-VMDisk {
     [CmdletBinding(SupportsShouldProcess)]
     param (
         [Parameter(Mandatory = $true)]
-        [ArgumentCompleter({
-            param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
-            Get-VM -Name "$wordToComplete*" | Select-Object -ExpandProperty Name
-        })]
         [string]$VMName,
         
         [Parameter(Mandatory = $false)]
