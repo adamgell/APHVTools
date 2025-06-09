@@ -39,4 +39,6 @@
 
 
 ## Adam's List
-- [ ] Make a public function to call a VM and mount its disk. Then make another function that checks for mounted disks and gives the option to dismount them via a numbered menu. 
+- [x] Make a public function to call a VM and mount its disk. Then make another function that checks for mounted disks and gives the option to dismount them via a numbered menu.
+  - [x] Created Mount-VMDisk function to mount VM disks
+  - [x] Created Get-MountedVMDisk function with interactive menu for dismounting 

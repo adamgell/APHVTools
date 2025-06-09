@@ -15,8 +15,157 @@ A PowerShell module for automating the creation and management of Intune-managed
 - 🛠️ **Troubleshooting Tools**: Option to include diagnostic tools in VMs
 - 📊 **Bulk Operations**: Create and manage multiple VMs efficiently
 
+## Architecture Overview
+
+HVTools follows a modular PowerShell architecture with clear separation of concerns:
+
+```mermaid
+graph TB
+    A[HVTools.psm1<br/>Main Module] --> B[Public Functions]
+    A --> C[Private Functions]
+    
+    B --> D[Initialize-HVTools<br/>Workspace Setup]
+    B --> E[Add-ImageToConfig<br/>Image Management]
+    B --> F[Add-TenantToConfig<br/>Tenant Setup]
+    B --> G[Add-NetworkToConfig<br/>Network Config]
+    B --> H[New-ClientVM<br/>VM Creation]
+    
+    C --> I[New-ClientDevice<br/>Device Registration]
+    C --> J[New-ClientVHDX<br/>Disk Management]
+    C --> K[Get-AutopilotPolicy<br/>Policy Retrieval]
+    C --> L[Publish-AutoPilotConfig<br/>Config Injection]
+    
+    H --> I
+    H --> J
+    H --> K
+    H --> L
+    
+    M[Configuration JSON<br/>~/.hvtoolscfgpath] --> A
+    N[Microsoft Graph API<br/>Intune Integration] --> K
+    O[Hyper-V PowerShell<br/>VM Management] --> H
+```
+
+### Key Components
+
+- **Configuration Management**: JSON-based configuration stored in user profile
+- **Module Loading**: Dynamic loading of Public/Private functions
+- **Multi-Tenant Support**: Isolated tenant configurations and VM storage
+- **Autopilot Integration**: Microsoft Graph API integration for device policies
+- **Image Management**: Reference VHDX creation and ISO handling
+
+## Workflow Diagrams
+
+### VM Creation Workflow
+
+```mermaid
+flowchart TD
+    A[Start: New-ClientVM] --> B{Initialize Config}
+    B --> C[Load Tenant Details]
+    C --> D[Load Image Details]
+    D --> E{Reference VHDX Exists?}
+    
+    E -->|No| F[Create Reference VHDX<br/>from ISO]
+    E -->|Yes| G{Skip Autopilot?}
+    F --> G
+    
+    G -->|No| H[Get Autopilot Policy<br/>from Intune]
+    G -->|Yes| I[Skip Autopilot Config]
+    H --> J[Generate VM Names]
+    I --> J
+    
+    J --> K{Single VM?}
+    
+    K -->|Yes| L[Create Single VM]
+    K -->|No| M[Create Multiple VMs<br/>Loop]
+    
+    L --> N[Copy Reference VHDX]
+    M --> N
+    
+    N --> O[Inject Autopilot Config]
+    O --> P[Add Troubleshooting Tools<br/>if requested]
+    P --> Q[Create Hyper-V VM]
+    Q --> R[Configure VM Settings<br/>CPU, Memory, Network]
+    R --> S[Enable TPM & Secure Boot]
+    S --> T[Start VM]
+    T --> U{Capture Hardware Hash?}
+    
+    U -->|Yes| V[Wait for OOBE<br/>Capture Hash]
+    U -->|No| W[End: VM Ready]
+    V --> W
+    
+    style A fill:#e1f5fe
+    style W fill:#c8e6c9
+    style F fill:#fff3e0
+    style H fill:#f3e5f5
+```
+
+### Configuration Setup Workflow
+
+```mermaid
+flowchart TD
+    A[Start: Initialize-HVTools] --> B[Create Workspace<br/>Directory Structure]
+    B --> C[Create hvconfig.json]
+    C --> D[Set Config Path<br/>~/.hvtoolscfgpath]
+    
+    D --> E[Add-ImageToConfig]
+    E --> F{ISO or VHDX?}
+    F -->|ISO| G[Convert ISO to<br/>Reference VHDX]
+    F -->|VHDX| H[Use Existing VHDX]
+    G --> I[Store Image Config]
+    H --> I
+    
+    I --> J[Add-TenantToConfig]
+    J --> K[Create Tenant Directory]
+    K --> L[Store Tenant Credentials]
+    L --> M[Link Default Image]
+    
+    M --> N[Add-NetworkToConfig]
+    N --> O[Configure Virtual Switch]
+    O --> P[Set VLAN if specified]
+    
+    P --> Q[Ready for VM Creation]
+    
+    style A fill:#e1f5fe
+    style Q fill:#c8e6c9
+    style G fill:#fff3e0
+```
+
+### Autopilot Integration Flow
+
+```mermaid
+sequenceDiagram
+    participant VM as New-ClientVM
+    participant AP as Get-AutopilotPolicy
+    participant MG as Microsoft Graph
+    participant IN as Intune Service
+    participant FS as File System
+    participant HV as Hyper-V
+    
+    VM->>AP: Request Autopilot Policy
+    AP->>MG: Connect with Tenant Credentials
+    MG->>IN: Query Device Management Policies
+    IN-->>MG: Return Autopilot Configuration
+    MG-->>AP: Policy JSON Data
+    AP->>FS: Save AutopilotConfigurationFile.json
+    AP-->>VM: Policy Retrieved
+    
+    VM->>FS: Copy Reference VHDX
+    VM->>FS: Mount VHDX for Configuration
+    VM->>FS: Inject Autopilot Config to VHDX
+    VM->>FS: Add Troubleshooting Tools (Optional)
+    VM->>FS: Unmount VHDX
+    
+    VM->>HV: Create VM with Configured VHDX
+    VM->>HV: Configure VM Hardware Settings
+    VM->>HV: Start VM
+    
+    Note over VM,HV: VM boots with Autopilot configuration<br/>automatically enrolls in Intune
+```
+
 ## Table of Contents
 
+- [Architecture Overview](#architecture-overview)
+- [Workflow Diagrams](#workflow-diagrams)
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
