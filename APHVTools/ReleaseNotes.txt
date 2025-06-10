@@ -1,8 +1,8 @@
-# HVTools v1.0.0 Release Notes
+# APHVTools v1.0.0 Release Notes
 
 ## 🎉 Initial Release
 
-HVTools is a PowerShell module that automates the creation and management of Intune-managed virtual machines in Hyper-V. The module creates VMs pre-configured for Windows Autopilot enrollment, supporting multi-tenant scenarios.
+APHVTools is a PowerShell module that automates the creation and management of Intune-managed virtual machines in Hyper-V. The module creates VMs pre-configured for Windows Autopilot enrollment, supporting multi-tenant scenarios.
 
 ## ✨ Key Features
 

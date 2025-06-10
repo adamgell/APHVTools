@@ -2,32 +2,32 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## HVTools PowerShell Module
+## APHVTools PowerShell Module
 
-HVTools automates the creation and management of Intune-managed virtual machines in Hyper-V. The module creates VMs pre-configured for Windows Autopilot enrollment, supporting multi-tenant scenarios.
+APHVTools automates the creation and management of Intune-managed virtual machines in Hyper-V. The module creates VMs pre-configured for Windows Autopilot enrollment, supporting multi-tenant scenarios.
 
 ## Build and Development Commands
 
 ### Building
-- Build module locally: `./build.ps1 -modulePath ./HVTools -buildLocal`
-- Build for CI/CD: `./build.ps1 -modulePath ./HVTools` (uses BUILD_BUILDID env var)
+- Build module locally: `./build.ps1 -modulePath ./APHVTools -buildLocal`
+- Build for CI/CD: `./build.ps1 -modulePath ./APHVTools` (uses BUILD_BUILDID env var)
 
 ### Module Management
-- Import module: `Import-Module ./HVTools/HVTools.psd1 -Force`
-- Reload module: `Remove-Module HVTools -Force; Import-Module ./HVTools/HVTools.psd1 -Force`
-- Test import: `Get-Command -Module HVTools`
+- Import module: `Import-Module ./APHVTools/APHVTools.psd1 -Force`
+- Reload module: `Remove-Module APHVTools -Force; Import-Module ./APHVTools/APHVTools.psd1 -Force`
+- Test import: `Get-Command -Module APHVTools`
 
 ### Common Development Tasks
-- Create new public function: Add to `/HVTools/Public/` directory
-- Create new private function: Add to `/HVTools/Private/` directory
+- Create new public function: Add to `/APHVTools/Public/` directory
+- Create new private function: Add to `/APHVTools/Private/` directory
 - Update module version: Handled automatically by build.ps1
-- Generate release notes: `git log --pretty=format:"- %s" > HVTools/ReleaseNotes.txt`
+- Generate release notes: `git log --pretty=format:"- %s" > APHVTools/ReleaseNotes.txt`
 - Commit and push to origin each time you finish a file
 
 ## Architecture and Key Components
 
 ### Module Loading Pattern
-The root module (`HVTools.psm1`) dynamically loads all functions from Public/ and Private/ directories. Public functions are automatically exported, while Private functions remain internal.
+The root module (`APHVTools.psm1`) dynamically loads all functions from Public/ and Private/ directories. Public functions are automatically exported, while Private functions remain internal.
 
 ### Configuration Management
 - Config stored at: `$env:USERPROFILE\.hvtoolscfgpath` (JSON format)

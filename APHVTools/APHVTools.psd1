@@ -5,7 +5,7 @@
 @{
 
     # Script module or binary module file associated with this manifest.
-    RootModule        = 'HVTools.psm1'
+    RootModule        = 'APHVTools.psm1'
 
     # Version number of this module.
     ModuleVersion     = '1.0.0'
@@ -26,7 +26,7 @@
     Copyright         = '(c) 2025 Adam Gell. All rights reserved.'
 
     # Description of the functionality provided by this module
-    Description       = 'Tools for automating Hyper-V client VM creation with Autopilot'
+    Description       = 'APHVTools - PowerShell module for automating Hyper-V client VM creation with Windows Autopilot integration'
 
     # Minimum version of the Windows PowerShell engine required by this module
     PowerShellVersion = '5.1'
@@ -118,7 +118,7 @@
             # IconUri = ''
 
             # ReleaseNotes of this module
-            ReleaseNotes = 'Initial release of HVTools - PowerShell module for automating Hyper-V client VM creation with Windows Autopilot integration.'
+            ReleaseNotes = 'Initial release of APHVTools - PowerShell module for automating Hyper-V client VM creation with Windows Autopilot integration.'
 
         } # End of PSData hashtable
 

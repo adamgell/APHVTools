@@ -1,7 +1,7 @@
-# HVTools PowerShell Module Guide
+# APHVTools PowerShell Module Guide
 
 ## Commands
-- Import module: `Import-Module HVTools`
+- Import module: `Import-Module APHVTools`
 - Initialize: `Initialize-HVTools -Path C:\path\to\workspace`
 - Configure: 
   - `Add-TenantToConfig`
