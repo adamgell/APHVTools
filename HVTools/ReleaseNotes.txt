@@ -43,9 +43,8 @@ HVTools is a PowerShell module that automates the creation and management of Int
 - PowerShell 5.1 or later
 - Hyper-V PowerShell module
 - Required PowerShell modules:
-  - WindowsAutoPilotIntune (v4.3+)
+  - WindowsAutoPilotIntune (v5.7+)
   - Microsoft.Graph.Intune (v6.1907.1.0+)
-  - Hyper-ConvertImage (v10.2+)
 
 ## 🔧 Recent Improvements
 

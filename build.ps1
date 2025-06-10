@@ -18,24 +18,8 @@ try {
     # Define required modules upfront
     $RequiredModules = @(
         @{
-            ModuleName = "Microsoft.Graph.Authentication"
-            ModuleVersion = "2.0.0"
-        },
-        @{
-            ModuleName = "Microsoft.Graph.DeviceManagement"
-            ModuleVersion = "2.0.0"
-        },
-        @{
-            ModuleName = "Microsoft.Graph.DeviceManagement.Enrollment"
-            ModuleVersion = "2.0.0"
-        },
-        @{
-            ModuleName = "Hyper-ConvertImage"
-            ModuleVersion = "10.2"
-        },
-        @{
             ModuleName = "WindowsAutoPilotIntune"
-            ModuleVersion = "4.3"
+            ModuleVersion = "5.7"
         },
         @{
             ModuleName = "Microsoft.Graph.Intune"

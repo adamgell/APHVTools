@@ -49,8 +49,7 @@
     # Modules that must be imported into the global environment prior to importing this module
     RequiredModules   = @(
         @{ ModuleName = "WindowsAutoPilotIntune"; ModuleVersion = "5.7" },
-        @{ ModuleName = "Microsoft.Graph.Intune"; ModuleVersion = "6.1907.1.0" },
-        @{ ModuleName = "Hyper-ConvertImage"; ModuleVersion = "10.2" }
+        @{ ModuleName = "Microsoft.Graph.Intune"; ModuleVersion = "6.1907.1.0" }
     )
 
     # Assemblies that must be loaded prior to importing this module
