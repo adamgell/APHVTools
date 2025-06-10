@@ -1,9 +1,23 @@
-.tests
-bin
-*.msi
+# Build artifacts
+bin/
 *.nupkg
 *.nuspec
 *.zip
+
+# Development files
+.tests/
 localenv.ps1
 todo.md
+TODO.md
+
+# OS files
 .DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+
+# IDE files
+.vscode/
+.idea/
