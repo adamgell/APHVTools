@@ -8,7 +8,7 @@
     RootModule        = 'HVTools.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '0.0.1'  # Updated version number
+    ModuleVersion     = '1.0.0'
 
     # Supported PSEditions
     # CompatiblePSEditions = @()
@@ -20,10 +20,10 @@
     Author            = 'Adam Gell'
 
     # Company or vendor of this module
-    CompanyName       = ''
+    CompanyName       = 'Adam Gell'
 
     # Copyright statement for this module
-    Copyright         = ''
+    Copyright         = '(c) 2025 Adam Gell. All rights reserved.'
 
     # Description of the functionality provided by this module
     Description       = 'Tools for automating Hyper-V client VM creation with Autopilot'
@@ -48,7 +48,7 @@
 
     # Modules that must be imported into the global environment prior to importing this module
     RequiredModules   = @(
-        @{ ModuleName = "WindowsAutoPilotIntune"; ModuleVersion = "4.3" },
+        @{ ModuleName = "WindowsAutoPilotIntune"; ModuleVersion = "5.7" },
         @{ ModuleName = "Microsoft.Graph.Intune"; ModuleVersion = "6.1907.1.0" },
         @{ ModuleName = "Hyper-ConvertImage"; ModuleVersion = "10.2" }
     )
@@ -107,10 +107,19 @@
         PSData = @{
 
             # Tags applied to this module. These help with module discovery in online galleries.
-            Tags       = @("Intune", "Azure", "Automation","Hyper-V", "Virtualization")
+            Tags       = @("Intune", "Azure", "Automation", "Hyper-V", "Virtualization", "Autopilot", "Windows")
+
+            # A URL to the license for this module.
+            LicenseUri = 'https://github.com/tabs-not-spaces/HVTools/blob/master/LICENSE'
 
             # A URL to the main website for this project.
             ProjectUri = 'https://github.com/tabs-not-spaces/HVTools'
+
+            # A URL to an icon representing this module.
+            # IconUri = ''
+
+            # ReleaseNotes of this module
+            ReleaseNotes = 'Initial release of HVTools - PowerShell module for automating Hyper-V client VM creation with Windows Autopilot integration.'
 
         } # End of PSData hashtable
 

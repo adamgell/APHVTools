@@ -1,2 +1,90 @@
-*** - Improving cmdlet autocomplete
-*** - Added checks for empty variables and handled failed VHDX mount
+# HVTools v1.0.0 Release Notes
+
+## 🎉 Initial Release
+
+HVTools is a PowerShell module that automates the creation and management of Intune-managed virtual machines in Hyper-V. The module creates VMs pre-configured for Windows Autopilot enrollment, supporting multi-tenant scenarios.
+
+## ✨ Key Features
+
+### Core Functionality
+- **Automated VM Creation**: Creates Hyper-V VMs with Windows Autopilot pre-configuration
+- **Multi-Tenant Support**: Manages multiple Intune tenants with isolated configurations
+- **Reference Image Management**: Automated Windows ISO to VHDX conversion and management
+- **Hardware Hash Capture**: Automatically captures and registers device hardware hashes
+- **Autopilot Integration**: Seamless integration with Windows Autopilot and Intune
+
+### VM Management
+- **VM Disk Operations**: Mount and dismount VM disks for maintenance
+- **Differencing Disks**: Efficient storage using differencing VHDXs from reference images
+- **Network Configuration**: Flexible network setup for various environments
+- **Troubleshooting Tools**: Built-in diagnostic and troubleshooting utilities
+
+## 🚀 Available Commands
+
+### Configuration Management
+- `Initialize-HVTools` - Initialize workspace and load configuration
+- `Get-HVToolsConfig` - Display current configuration
+- `Show-HVToolsConfig` - Show formatted configuration display
+
+### Setup Commands
+- `Add-TenantToConfig` - Add Intune tenant configuration
+- `Add-NetworkToConfig` - Configure network settings
+- `Add-ImageToConfig` - Register Windows ISO images and create reference VHDXs
+- `Add-ToolsToConfig` - Configure troubleshooting tools
+- `Get-ToolsFromConfig` - Retrieve configured tools
+
+### VM Operations
+- `New-ClientVM` - Create new client VMs with Autopilot configuration
+- `Mount-VMDisk` - Mount VM disks for maintenance
+- `Get-MountedVMDisk` - List mounted VM disks
+
+## 📋 Requirements
+
+- PowerShell 5.1 or later
+- Hyper-V PowerShell module
+- Required PowerShell modules:
+  - WindowsAutoPilotIntune (v4.3+)
+  - Microsoft.Graph.Intune (v6.1907.1.0+)
+  - Hyper-ConvertImage (v10.2+)
+
+## 🔧 Recent Improvements
+
+### VM Disk Management
+- Enhanced VHD detection for differencing disks
+- Improved Mount-VMDisk with VM shutdown capability
+- Fixed parameter prompts in disk operations
+- Added intelligent drive letter selection
+
+### Error Handling & Reliability
+- Improved DISM error handling and diagnostics
+- Better diskpart error handling for VHDX creation
+- Enhanced PowerShell cmdlet fallbacks
+- Fixed array-to-string conversion errors
+
+### User Experience
+- Added argument completers for all parameters
+- Improved configuration display formatting
+- Enhanced logging and diagnostic capabilities
+- Better troubleshooting tool integration
+
+## 🐛 Bug Fixes
+
+- Fixed Get-VHD parameter prompt issues
+- Resolved Write-LogEntry parameter usage errors
+- Fixed VM serial number handling (strip hyphens)
+- Corrected diskpart VDISK type parameters
+- Improved module import order and dependencies
+
+## 📚 Documentation
+
+Comprehensive documentation is available in the `/docs` folder:
+- Quick Start Guide
+- Advanced Usage
+- API Reference
+- Autopilot Setup Guide
+- Troubleshooting Guide
+- Architecture Overview
+
+## 🙏 Acknowledgments
+
+Thanks to the PowerShell and Intune communities for their contributions and feedback that made this module possible.
