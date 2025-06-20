@@ -1,9 +1,9 @@
-# HVTools
+# APHVTools
 
 [![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-blue.svg)](https://github.com/PowerShell/PowerShell)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-A PowerShell module for automating the creation and management of Intune-managed virtual machines in Hyper-V. HVTools streamlines the process of creating test/development VMs that are pre-configured for Windows Autopilot enrollment.
+A PowerShell module for automating the creation and management of Intune-managed virtual machines in Hyper-V. APHVTools streamlines the process of creating test/development VMs that are pre-configured for Windows Autopilot enrollment.
 
 ## Features
 
@@ -17,29 +17,29 @@ A PowerShell module for automating the creation and management of Intune-managed
 
 ## Architecture Overview
 
-HVTools follows a modular PowerShell architecture with clear separation of concerns:
+APHVTools follows a modular PowerShell architecture with clear separation of concerns:
 
 ```mermaid
 graph TB
-    A[HVTools.psm1<br/>Main Module] --> B[Public Functions]
+    A[APHVTools.psm1<br/>Main Module] --> B[Public Functions]
     A --> C[Private Functions]
-    
-    B --> D[Initialize-HVTools<br/>Workspace Setup]
+
+    B --> D[Initialize-APHVTools<br/>Workspace Setup]
     B --> E[Add-ImageToConfig<br/>Image Management]
     B --> F[Add-TenantToConfig<br/>Tenant Setup]
     B --> G[Add-NetworkToConfig<br/>Network Config]
     B --> H[New-ClientVM<br/>VM Creation]
-    
+
     C --> I[New-ClientDevice<br/>Device Registration]
     C --> J[New-ClientVHDX<br/>Disk Management]
     C --> K[Get-AutopilotPolicy<br/>Policy Retrieval]
     C --> L[Publish-AutoPilotConfig<br/>Config Injection]
-    
+
     H --> I
     H --> J
     H --> K
     H --> L
-    
+
     M[Configuration JSON<br/>~/.hvtoolscfgpath] --> A
     N[Microsoft Graph API<br/>Intune Integration] --> K
     O[Hyper-V PowerShell<br/>VM Management] --> H
@@ -63,24 +63,24 @@ flowchart TD
     B --> C[Load Tenant Details]
     C --> D[Load Image Details]
     D --> E{Reference VHDX Exists?}
-    
+
     E -->|No| F[Create Reference VHDX<br/>from ISO]
     E -->|Yes| G{Skip Autopilot?}
     F --> G
-    
+
     G -->|No| H[Get Autopilot Policy<br/>from Intune]
     G -->|Yes| I[Skip Autopilot Config]
     H --> J[Generate VM Names]
     I --> J
-    
+
     J --> K{Single VM?}
-    
+
     K -->|Yes| L[Create Single VM]
     K -->|No| M[Create Multiple VMs<br/>Loop]
-    
+
     L --> N[Copy Reference VHDX]
     M --> N
-    
+
     N --> O[Inject Autopilot Config]
     O --> P[Add Troubleshooting Tools<br/>if requested]
     P --> Q[Create Hyper-V VM]
@@ -88,11 +88,11 @@ flowchart TD
     R --> S[Enable TPM & Secure Boot]
     S --> T[Start VM]
     T --> U{Capture Hardware Hash?}
-    
+
     U -->|Yes| V[Wait for OOBE<br/>Capture Hash]
     U -->|No| W[End: VM Ready]
     V --> W
-    
+
     style A fill:#e1f5fe
     style W fill:#c8e6c9
     style F fill:#fff3e0
@@ -103,28 +103,28 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A[Start: Initialize-HVTools] --> B[Create Workspace<br/>Directory Structure]
+    A[Start: Initialize-APHVTools] --> B[Create Workspace<br/>Directory Structure]
     B --> C[Create hvconfig.json]
     C --> D[Set Config Path<br/>~/.hvtoolscfgpath]
-    
+
     D --> E[Add-ImageToConfig]
     E --> F{ISO or VHDX?}
     F -->|ISO| G[Convert ISO to<br/>Reference VHDX]
     F -->|VHDX| H[Use Existing VHDX]
     G --> I[Store Image Config]
     H --> I
-    
+
     I --> J[Add-TenantToConfig]
     J --> K[Create Tenant Directory]
     K --> L[Store Tenant Credentials]
     L --> M[Link Default Image]
-    
+
     M --> N[Add-NetworkToConfig]
     N --> O[Configure Virtual Switch]
     O --> P[Set VLAN if specified]
-    
+
     P --> Q[Ready for VM Creation]
-    
+
     style A fill:#e1f5fe
     style Q fill:#c8e6c9
     style G fill:#fff3e0
@@ -140,7 +140,7 @@ sequenceDiagram
     participant IN as Intune Service
     participant FS as File System
     participant HV as Hyper-V
-    
+
     VM->>AP: Request Autopilot Policy
     AP->>MG: Connect with Tenant Credentials
     MG->>IN: Query Device Management Policies
@@ -148,17 +148,17 @@ sequenceDiagram
     MG-->>AP: Policy JSON Data
     AP->>FS: Save AutopilotConfigurationFile.json
     AP-->>VM: Policy Retrieved
-    
+
     VM->>FS: Copy Reference VHDX
     VM->>FS: Mount VHDX for Configuration
     VM->>FS: Inject Autopilot Config to VHDX
     VM->>FS: Add Troubleshooting Tools (Optional)
     VM->>FS: Unmount VHDX
-    
+
     VM->>HV: Create VM with Configured VHDX
     VM->>HV: Configure VM Hardware Settings
     VM->>HV: Start VM
-    
+
     Note over VM,HV: VM boots with Autopilot configuration<br/>automatically enrolls in Intune
 ```
 
@@ -212,10 +212,10 @@ The following modules will be automatically installed if missing:
 
 ```powershell
 # Install for current user
-Install-Module -Name HVTools -Scope CurrentUser
+Install-Module -Name APHVTools -Scope CurrentUser
 
 # Or install for all users (requires admin rights)
-Install-Module -Name HVTools -Scope AllUsers
+Install-Module -Name APHVTools -Scope AllUsers
 ```
 
 ### From Source
@@ -226,18 +226,18 @@ git clone https://github.com/adamgell/HVTools.git
 cd HVTools
 
 # Build and import the module
-./build.ps1 -modulePath ./HVTools -buildLocal
-Import-Module ./HVTools/HVTools.psd1 -Force
+./build.ps1 -modulePath ./APHVTools -buildLocal
+Import-Module ./APHVTools/APHVTools.psd1 -Force
 ```
 
 ## Quick Start
 
 ```powershell
 # 1. Import the module
-Import-Module HVTools
+Import-Module APHVTools
 
 # 2. Initialize workspace
-Initialize-HVTools -Path "C:\HVTools-Workspace"
+Initialize-APHVTools -Path "C:\APHVTools-Workspace"
 
 # 3. Add a Windows image
 Add-ImageToConfig -ImageName "Win11-23H2" -IsoPath "C:\ISOs\Windows11_23H2.iso"
@@ -256,10 +256,10 @@ New-ClientVM -TenantName "Contoso" -NumberOfVMs 5 -CPUsPerVM 2 -VMMemory 4GB
 
 ### Initialize Workspace
 
-Before using HVTools, initialize a workspace where VMs and configurations will be stored:
+Before using APHVTools, initialize a workspace where VMs and configurations will be stored:
 
 ```powershell
-Initialize-HVTools -Path "C:\HVTools-Workspace"
+Initialize-APHVTools -Path "C:\APHVTools-Workspace"
 ```
 
 This creates the necessary folder structure and configuration files.
@@ -293,7 +293,7 @@ Add-TenantToConfig -TenantName "Contoso" -AdminUpn "admin@contoso.com" -ImageNam
 Add-TenantToConfig -TenantName "Fabrikam" -AdminUpn "admin@fabrikam.com" -ImageName "Win10-22H2"
 
 # View all configured tenants
-Get-HVToolsConfig | Select-Object -ExpandProperty tenantConfig
+Get-APHVToolsConfig | Select-Object -ExpandProperty tenantConfig
 ```
 
 ### Setup Networking
@@ -382,20 +382,20 @@ Add-TenantToConfig -TenantName "Test" -AdminUpn "admin@test.com" -ImageName "Win
 
 ### Configuration File Location
 
-HVTools stores its configuration at: `$env:USERPROFILE\.hvtoolscfgpath`
+APHVTools stores its configuration at: `$env:USERPROFILE\.hvtoolscfgpath`
 
 ### Configuration Structure
 
 ```json
 {
-  "vmPath": "C:\\HVTools-Workspace\\VMs",
-  "referenceVHDXPath": "C:\\HVTools-Workspace\\ReferenceVHDX",
+  "vmPath": "C:\\APHVTools-Workspace\\VMs",
+  "referenceVHDXPath": "C:\\APHVTools-Workspace\\ReferenceVHDX",
   "tenantConfig": [
     {
       "tenantName": "Contoso",
       "adminUpn": "admin@contoso.com",
       "imageName": "Win11-23H2",
-      "pathToConfig": "C:\\HVTools-Workspace\\Contoso"
+      "pathToConfig": "C:\\APHVTools-Workspace\\Contoso"
     }
   ],
   "networkConfig": {
@@ -407,7 +407,7 @@ HVTools stores its configuration at: `$env:USERPROFILE\.hvtoolscfgpath`
       "imageName": "Win11-23H2",
       "imagePath": "C:\\ISOs\\Windows11_23H2.iso",
       "imageIndex": 3,
-      "refVHDX": "C:\\HVTools-Workspace\\ReferenceVHDX\\Win11-23H2.vhdx"
+      "refVHDX": "C:\\APHVTools-Workspace\\ReferenceVHDX\\Win11-23H2.vhdx"
     }
   ]
 }
@@ -417,12 +417,12 @@ HVTools stores its configuration at: `$env:USERPROFILE\.hvtoolscfgpath`
 
 ```powershell
 # View full configuration
-Get-HVToolsConfig
+Get-APHVToolsConfig
 
 # View specific sections
-Get-HVToolsConfig | Select-Object -ExpandProperty tenantConfig
-Get-HVToolsConfig | Select-Object -ExpandProperty images
-Get-HVToolsConfig | Select-Object -ExpandProperty networkConfig
+Get-APHVToolsConfig | Select-Object -ExpandProperty tenantConfig
+Get-APHVToolsConfig | Select-Object -ExpandProperty images
+Get-APHVToolsConfig | Select-Object -ExpandProperty networkConfig
 ```
 
 ## Troubleshooting
@@ -432,8 +432,8 @@ Get-HVToolsConfig | Select-Object -ExpandProperty networkConfig
 #### 1. Module Import Failures
 ```powershell
 # Force reload the module
-Remove-Module HVTools -Force -ErrorAction SilentlyContinue
-Import-Module HVTools -Force
+Remove-Module APHVTools -Force -ErrorAction SilentlyContinue
+Import-Module APHVTools -Force
 
 # Check for missing dependencies
 Get-Module -ListAvailable | Where-Object Name -like "*Graph*"
@@ -463,7 +463,7 @@ Get-AutopilotPolicy
 #### 4. Reference VHDX Issues
 ```powershell
 # Verify reference VHDX exists
-Test-Path (Get-HVToolsConfig).referenceVHDXPath
+Test-Path (Get-APHVToolsConfig).referenceVHDXPath
 
 # Check VHDX file integrity
 Get-VHD -Path "path\to\reference.vhdx"
@@ -486,9 +486,9 @@ $VerbosePreference = "SilentlyContinue"
 
 ### Log Files
 
-HVTools creates log files in the tenant folders:
-- Location: `C:\HVTools-Workspace\<TenantName>\Logs\`
-- Format: `HVTools_<timestamp>.log`
+APHVTools creates log files in the tenant folders:
+- Location: `C:\APHVTools-Workspace\<TenantName>\Logs\`
+- Format: `APHVTools_<timestamp>.log`
 
 ## Contributing
 
@@ -502,10 +502,10 @@ git clone https://github.com/adamgell/HVTools.git
 cd HVTools
 
 # Build locally
-./build.ps1 -modulePath ./HVTools -buildLocal
+./build.ps1 -modulePath ./APHVTools -buildLocal
 
 # Import for testing
-Import-Module ./HVTools/HVTools.psd1 -Force
+Import-Module ./APHVTools/APHVTools.psd1 -Force
 ```
 
 ## License

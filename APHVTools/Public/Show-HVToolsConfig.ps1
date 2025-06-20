@@ -1,41 +1,41 @@
-function Show-HVToolsConfig {
+function Show-APHVToolsConfig {
     <#
     .SYNOPSIS
-        Displays detailed HVTools configuration information
-    
+            Displays detailed APHVTools configuration information
+
     .DESCRIPTION
-        Shows specific sections of the HVTools configuration with detailed formatting options
-    
+    Shows specific sections of the APHVTools configuration with detailed formatting options
+
     .PARAMETER Section
         The configuration section to display: All, Tenants, Images, Network, Tools, Paths
-    
+
     .PARAMETER TenantName
         Filter to show configuration for a specific tenant
-    
+
     .PARAMETER ImageName
         Filter to show configuration for a specific image
-    
+
     .PARAMETER ExportPath
         Export the configuration to a file (JSON or CSV format based on extension)
-    
+
     .EXAMPLE
-        Show-HVToolsConfig
-        
+        Show-APHVToolsConfig
+
         Shows all configuration sections
-    
+
     .EXAMPLE
-        Show-HVToolsConfig -Section Tenants
-        
+        Show-APHVToolsConfig -Section Tenants
+
         Shows only tenant configuration
-    
+
     .EXAMPLE
-        Show-HVToolsConfig -TenantName "Contoso"
-        
+        Show-APHVToolsConfig -TenantName "Contoso"
+
         Shows configuration specific to the Contoso tenant
-    
+
     .EXAMPLE
-        Show-HVToolsConfig -ExportPath "C:\Temp\hvconfig.json"
-        
+        Show-APHVToolsConfig -ExportPath "C:\Temp\hvconfig.json"
+
         Exports the configuration to a JSON file
     #>
     [CmdletBinding()]
@@ -43,25 +43,25 @@ function Show-HVToolsConfig {
         [Parameter(Position = 0)]
         [ValidateSet('All', 'Tenants', 'Images', 'Network', 'Tools', 'Paths', 'Summary')]
         [string]$Section = 'All',
-        
+
         [Parameter()]
         [string]$TenantName,
-        
+
         [Parameter()]
         [string]$ImageName,
-        
+
         [Parameter()]
         [string]$ExportPath
     )
-    
+
     try {
         # Get the raw configuration
-        $config = Get-HVToolsConfig -Raw
-        
+        $config = Get-APHVToolsConfig -Raw
+
         if (-not $config) {
-            throw "Unable to retrieve HVTools configuration"
+            throw "Unable to retrieve APHVTools configuration"
         }
-        
+
         # Filter by tenant if specified
         if ($TenantName) {
             $tenant = $config.tenantConfig | Where-Object { $_.TenantName -eq $TenantName }
@@ -69,7 +69,7 @@ function Show-HVToolsConfig {
                 Write-Warning "Tenant '$TenantName' not found"
                 return
             }
-            
+
             Write-Host "`n==== Configuration for Tenant: $TenantName ====" -ForegroundColor Cyan
             Write-Host "Admin UPN: " -NoNewline -ForegroundColor Yellow
             Write-Host $tenant.AdminUpn
@@ -77,7 +77,7 @@ function Show-HVToolsConfig {
             Write-Host $tenant.ImageName
             Write-Host "Config Path: " -NoNewline -ForegroundColor Yellow
             Write-Host $tenant.pathToConfig
-            
+
             # Show related image info
             $image = $config.images | Where-Object { $_.imageName -eq $tenant.ImageName }
             if ($image) {
@@ -87,10 +87,10 @@ function Show-HVToolsConfig {
                 Write-Host "  Reference VHDX: " -NoNewline
                 Write-Host (Split-Path $image.refImagePath -Leaf) -ForegroundColor White
             }
-            
+
             return
         }
-        
+
         # Filter by image if specified
         if ($ImageName) {
             $image = $config.images | Where-Object { $_.imageName -eq $ImageName }
@@ -98,13 +98,13 @@ function Show-HVToolsConfig {
                 Write-Warning "Image '$ImageName' not found"
                 return
             }
-            
+
             Write-Host "`n==== Configuration for Image: $ImageName ====" -ForegroundColor Cyan
             Write-Host "ISO Path: " -ForegroundColor Yellow
             Write-Host "  $($image.imagePath)" -ForegroundColor White
             Write-Host "Reference VHDX: " -ForegroundColor Yellow
             Write-Host "  $($image.refImagePath)" -ForegroundColor White
-            
+
             # Show tenants using this image
             $tenantsUsingImage = $config.tenantConfig | Where-Object { $_.ImageName -eq $ImageName }
             if ($tenantsUsingImage) {
@@ -113,14 +113,14 @@ function Show-HVToolsConfig {
                     Write-Host "  - $($_.TenantName)" -ForegroundColor White
                 }
             }
-            
+
             return
         }
-        
+
         # Display based on section
         switch ($Section) {
             'Summary' {
-                Write-Host "`n==== HVTools Configuration Summary ====" -ForegroundColor Cyan
+                Write-Host "`n==== APHVTools Configuration Summary ====" -ForegroundColor Cyan
                 Write-Host "Configuration File: " -NoNewline -ForegroundColor Yellow
                 Write-Host $config.hvConfigPath
                 Write-Host "Total Tenants: " -NoNewline -ForegroundColor Yellow
@@ -132,7 +132,7 @@ function Show-HVToolsConfig {
                 Write-Host "Tools Configured: " -NoNewline -ForegroundColor Yellow
                 Write-Host $(if ($config.tools) { "Yes ($($config.tools.Count) tools)" } else { "No" })
             }
-            
+
             'Paths' {
                 Write-Host "`n==== Path Configuration ====" -ForegroundColor Cyan
                 Write-Host "Configuration File:" -ForegroundColor Yellow
@@ -142,7 +142,7 @@ function Show-HVToolsConfig {
                 Write-Host "Reference VHDX Path:" -ForegroundColor Yellow
                 Write-Host "  $(Split-Path ($config.images[0].refImagePath) -Parent)" -ForegroundColor White
             }
-            
+
             'Network' {
                 Write-Host "`n==== Network Configuration ====" -ForegroundColor Cyan
                 Write-Host "Virtual Switch Name: " -NoNewline -ForegroundColor Yellow
@@ -156,7 +156,7 @@ function Show-HVToolsConfig {
                     Write-Host "Not configured" -ForegroundColor DarkGray
                 }
             }
-            
+
             'Tenants' {
                 Write-Host "`n==== Tenant Configuration ====" -ForegroundColor Cyan
                 if ($config.tenantConfig -and $config.tenantConfig.Count -gt 0) {
@@ -172,7 +172,7 @@ function Show-HVToolsConfig {
                     Write-Host "No tenants configured" -ForegroundColor Yellow
                 }
             }
-            
+
             'Images' {
                 Write-Host "`n==== Image Configuration ====" -ForegroundColor Cyan
                 if ($config.images -and $config.images.Count -gt 0) {
@@ -188,7 +188,7 @@ function Show-HVToolsConfig {
                     Write-Host "No images configured" -ForegroundColor Yellow
                 }
             }
-            
+
             'Tools' {
                 Write-Host "`n==== Troubleshooting Tools ====" -ForegroundColor Cyan
                 if ($config.tools -and $config.tools.Count -gt 0) {
@@ -205,19 +205,19 @@ function Show-HVToolsConfig {
                     Write-Host "No tools configured" -ForegroundColor Yellow
                 }
             }
-            
+
             'All' {
                 # Show all sections
                 'Summary', 'Paths', 'Network', 'Tenants', 'Images', 'Tools' | ForEach-Object {
-                    Show-HVToolsConfig -Section $_
+                    Show-APHVToolsConfig -Section $_
                 }
             }
         }
-        
+
         # Export if requested
         if ($ExportPath) {
             $extension = [System.IO.Path]::GetExtension($ExportPath).ToLower()
-            
+
             switch ($extension) {
                 '.json' {
                     $config | ConvertTo-Json -Depth 10 | Out-File -FilePath $ExportPath -Encoding UTF8
@@ -226,7 +226,7 @@ function Show-HVToolsConfig {
                 '.csv' {
                     # Create a flattened view for CSV
                     $flatConfig = @()
-                    
+
                     # Add tenant data
                     $config.tenantConfig | ForEach-Object {
                         $flatConfig += [PSCustomObject]@{
@@ -237,7 +237,7 @@ function Show-HVToolsConfig {
                             Value3 = $_.pathToConfig
                         }
                     }
-                    
+
                     # Add image data
                     $config.images | ForEach-Object {
                         $flatConfig += [PSCustomObject]@{
@@ -248,7 +248,7 @@ function Show-HVToolsConfig {
                             Value3 = ''
                         }
                     }
-                    
+
                     $flatConfig | Export-Csv -Path $ExportPath -NoTypeInformation
                     Write-Host "`nConfiguration exported to: $ExportPath" -ForegroundColor Green
                 }

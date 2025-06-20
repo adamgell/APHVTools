@@ -1,4 +1,4 @@
-function Initialize-HVTools {
+function Initialize-APHVTools {
     [cmdletbinding()]
     param (
         [parameter(Position = 1, Mandatory = $true)]

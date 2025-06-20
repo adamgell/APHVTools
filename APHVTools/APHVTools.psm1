@@ -48,9 +48,9 @@ Export-ModuleMember -Function $Public.BaseName
 # Tenant Name Completer
 $tenantNameCompleter = {
     param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
-    
+
     if ($script:hvConfig -and $script:hvConfig.tenantConfig) {
-        $script:hvConfig.tenantConfig | 
+        $script:hvConfig.tenantConfig |
             Where-Object { $_.TenantName -like "$wordToComplete*" } |
             ForEach-Object {
                 [System.Management.Automation.CompletionResult]::new(
@@ -66,9 +66,9 @@ $tenantNameCompleter = {
 # Image Name Completer
 $imageNameCompleter = {
     param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
-    
+
     if ($script:hvConfig -and $script:hvConfig.images) {
-        $script:hvConfig.images | 
+        $script:hvConfig.images |
             Where-Object { $_.imageName -like "$wordToComplete*" } |
             ForEach-Object {
                 $isoName = Split-Path $_.imagePath -Leaf
@@ -85,8 +85,8 @@ $imageNameCompleter = {
 # Virtual Switch Completer
 $vSwitchCompleter = {
     param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
-    
-    Get-VMSwitch -ErrorAction SilentlyContinue | 
+
+    Get-VMSwitch -ErrorAction SilentlyContinue |
         Where-Object { $_.Name -like "$wordToComplete*" } |
         ForEach-Object {
             [System.Management.Automation.CompletionResult]::new(
@@ -101,7 +101,7 @@ $vSwitchCompleter = {
 # Tools Name Completer
 $toolsCompleter = {
     param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
-    
+
     # Common troubleshooting tools
     $commonTools = @(
         'ProcMon.exe',
@@ -117,8 +117,8 @@ $toolsCompleter = {
         'VMMap.exe',
         'DiskMon.exe'
     )
-    
-    $commonTools | 
+
+    $commonTools |
         Where-Object { $_ -like "$wordToComplete*" } |
         ForEach-Object {
             [System.Management.Automation.CompletionResult]::new(
@@ -133,7 +133,7 @@ $toolsCompleter = {
 # VM Name Completer
 $vmNameCompleter = {
     param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
-    
+
     Get-VM -Name "$wordToComplete*" -ErrorAction SilentlyContinue |
         ForEach-Object {
             [System.Management.Automation.CompletionResult]::new(
@@ -147,12 +147,12 @@ $vmNameCompleter = {
 
 # Register completers for TenantName parameters
 Register-ArgumentCompleter -CommandName 'New-ClientVM' -ParameterName 'TenantName' -ScriptBlock $tenantNameCompleter
-Register-ArgumentCompleter -CommandName 'Show-HVToolsConfig' -ParameterName 'TenantName' -ScriptBlock $tenantNameCompleter
+Register-ArgumentCompleter -CommandName 'Show-APHVToolsConfig' -ParameterName 'TenantName' -ScriptBlock $tenantNameCompleter
 
 # Register completers for ImageName/OSBuild parameters
 Register-ArgumentCompleter -CommandName 'Add-TenantToConfig' -ParameterName 'ImageName' -ScriptBlock $imageNameCompleter
 Register-ArgumentCompleter -CommandName 'New-ClientVM' -ParameterName 'OSBuild' -ScriptBlock $imageNameCompleter
-Register-ArgumentCompleter -CommandName 'Show-HVToolsConfig' -ParameterName 'ImageName' -ScriptBlock $imageNameCompleter
+Register-ArgumentCompleter -CommandName 'Show-APHVToolsConfig' -ParameterName 'ImageName' -ScriptBlock $imageNameCompleter
 
 # Register completers for VSwitchName parameters
 Register-ArgumentCompleter -CommandName 'Add-NetworkToConfig' -ParameterName 'VSwitchName' -ScriptBlock $vSwitchCompleter

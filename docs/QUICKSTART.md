@@ -1,6 +1,6 @@
-# HVTools Quick Start Guide
+# APHVTools Quick Start Guide
 
-This guide will help you get up and running with HVTools in under 10 minutes.
+This guide will help you get up and running with APHVTools in under 10 minutes.
 
 ## Prerequisites
 
@@ -12,7 +12,7 @@ Before starting, ensure you have:
 - ✅ A Windows ISO file
 - ✅ Microsoft Intune admin access (optional, for Autopilot)
 
-## Step 1: Install HVTools
+## Step 1: Install APHVTools
 
 Open PowerShell as Administrator and run:
 
@@ -34,8 +34,8 @@ Initialize-HVTools -Path "C:\HVTools"
 ```
 
 This creates:
-- `C:\HVTools\VMs` - Where your VMs will be stored
-- `C:\HVTools\ReferenceVHDX` - Where base images are kept
+- `C:\APHVTools\VMs` - Where your VMs will be stored
+- `C:\APHVTools\ReferenceVHDX` - Where base images are kept
 - Configuration file at `$env:USERPROFILE\.hvtoolscfgpath`
 
 ## Step 3: Add a Windows Image
@@ -87,11 +87,11 @@ Here's everything in one script:
 
 ```powershell
 # 1. Install and import module
-Install-Module -Name HVTools -Scope CurrentUser -Force
-Import-Module HVTools
+Install-Module -Name APHVTools -Scope CurrentUser -Force
+Import-Module APHVTools
 
 # 2. Initialize workspace
-Initialize-HVTools -Path "C:\HVTools"
+Initialize-APHVTools -Path "C:\APHVTools"
 
 # 3. Add Windows image
 Add-ImageToConfig -ImageName "Win11" -IsoPath "C:\ISOs\Win11_23H2.iso"

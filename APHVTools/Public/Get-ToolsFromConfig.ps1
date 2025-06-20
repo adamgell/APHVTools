@@ -6,7 +6,7 @@ function Get-ToolsFromConfig {
         if (-not $script:hvConfig) {
             $script:hvConfig = (Get-Content -Path "$(Get-Content "$env:USERPROFILE\.hvtoolscfgpath" -ErrorAction SilentlyContinue)" -Raw -ErrorAction SilentlyContinue | ConvertFrom-Json)
             if (-not $script:hvConfig) {
-                throw "Could not find HVTools configuration. Please run Initialize-HVTools first."
+                throw "Could not find APHVTools configuration. Please run Initialize-APHVTools first."
             }
         }
 

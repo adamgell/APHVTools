@@ -1,5 +1,5 @@
 #
-# Module manifest for module 'HVTools'
+# Module manifest for module 'APHVTools'
 #
 
 @{
@@ -69,9 +69,9 @@
 
     # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
     FunctionsToExport = @(
-        'Initialize-HVTools',
-        'Get-HVToolsConfig',
-        'Show-HVToolsConfig',
+        'Initialize-APHVTools',
+        'Get-APHVToolsConfig',
+        'Show-APHVToolsConfig',
         'Add-ImageToConfig',
         'Add-NetworkToConfig',
         'Add-TenantToConfig',
@@ -109,10 +109,10 @@
             Tags       = @("Intune", "Azure", "Automation", "Hyper-V", "Virtualization", "Autopilot", "Windows")
 
             # A URL to the license for this module.
-            LicenseUri = 'https://github.com/tabs-not-spaces/HVTools/blob/master/LICENSE'
+            LicenseUri = 'https://github.com/adamgell/HVTools/blob/master/LICENSE'
 
             # A URL to the main website for this project.
-            ProjectUri = 'https://github.com/tabs-not-spaces/HVTools'
+            ProjectUri = 'https://github.com/adamgell/HVTools'
 
             # A URL to an icon representing this module.
             # IconUri = ''
