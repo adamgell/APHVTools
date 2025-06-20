@@ -63,6 +63,18 @@ function Convert-WindowsImageInternal {
         [string]$UnattendPath
     )
 
+    Write-Host "=== Convert-WindowsImageInternal Debug Logging ===" -ForegroundColor Cyan
+    Write-Host "Starting Convert-WindowsImageInternal with parameters:" -ForegroundColor Yellow
+    Write-Host "  SourcePath: $SourcePath" -ForegroundColor Gray
+    Write-Host "  Edition: $Edition" -ForegroundColor Gray
+    Write-Host "  VhdPath: $VhdPath" -ForegroundColor Gray
+    Write-Host "  VhdFormat: $VhdFormat" -ForegroundColor Gray
+    Write-Host "  VhdType: $VhdType" -ForegroundColor Gray
+    Write-Host "  DiskLayout: $DiskLayout" -ForegroundColor Gray
+    Write-Host "  SizeBytes: $SizeBytes ($([math]::Round($SizeBytes/1GB, 2)) GB)" -ForegroundColor Gray
+    Write-Host "  UnattendPath: $UnattendPath" -ForegroundColor Gray
+    Write-Host "" -ForegroundColor Gray
+
     Write-Verbose "Starting Convert-WindowsImageInternal with parameters:"
     Write-Verbose "  SourcePath: $SourcePath"
     Write-Verbose "  Edition: $Edition"
