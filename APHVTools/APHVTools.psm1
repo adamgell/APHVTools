@@ -40,7 +40,17 @@ foreach ($import in @($Public + $Private)) {
 #endregion
 
 #region Export Public Functions
-Export-ModuleMember -Function $Public.BaseName
+# Get the actual function names from the public files
+$exportedFunctions = @()
+foreach ($file in $Public) {
+    $content = Get-Content $file.FullName -Raw
+    if ($content -match '^function\s+([^\s{]+)') {
+        $functionName = $matches[1]
+        $exportedFunctions += $functionName
+    }
+}
+
+Export-ModuleMember -Function $exportedFunctions
 #endregion
 
 #region Register Argument Completers

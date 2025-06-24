@@ -18,6 +18,22 @@ function Import-APHVToolsModule {
             if (Test-Path "$path\APHVTools.psm1") {
                 Import-Module $path -Force
                 Write-Host "APHVTools module loaded from: $path"
+
+                # Verify that required functions are available
+                $requiredFunctions = @('Get-APHVToolsConfig')
+                $missingFunctions = @()
+
+                foreach ($func in $requiredFunctions) {
+                    if (-not (Get-Command -Name $func -ErrorAction SilentlyContinue)) {
+                        $missingFunctions += $func
+                    }
+                }
+
+                if ($missingFunctions.Count -gt 0) {
+                    Write-Warning "Missing functions: $($missingFunctions -join ', ')"
+                    return $false
+                }
+
                 return $true
             }
         }
@@ -27,6 +43,22 @@ function Import-APHVToolsModule {
         if ($module) {
             Import-Module APHVTools -Force
             Write-Host "APHVTools module loaded from installed modules"
+
+            # Verify that required functions are available
+            $requiredFunctions = @('Get-APHVToolsConfig')
+            $missingFunctions = @()
+
+            foreach ($func in $requiredFunctions) {
+                if (-not (Get-Command -Name $func -ErrorAction SilentlyContinue)) {
+                    $missingFunctions += $func
+                }
+            }
+
+            if ($missingFunctions.Count -gt 0) {
+                Write-Warning "Missing functions: $($missingFunctions -join ', ')"
+                return $false
+            }
+
             return $true
         }
 
@@ -40,8 +72,30 @@ function Import-APHVToolsModule {
 
 # Load the module
 if (-not (Import-APHVToolsModule)) {
-    [System.Windows.MessageBox]::Show("APHVTools module not found. Please ensure it is installed.", "Module Not Found", "OK", "Error")
-    exit 1
+    # Fallback: Try to dot-source the functions directly
+    try {
+        Write-Host "Attempting to load functions directly..." -ForegroundColor Yellow
+
+        # Try to dot-source the required functions
+        $modulePath = "$PSScriptRoot\..\APHVTools"
+        if (Test-Path "$modulePath\Public\Get-HVToolsConfig.ps1") {
+            . "$modulePath\Public\Get-HVToolsConfig.ps1"
+            Write-Host "Loaded Get-APHVToolsConfig function directly" -ForegroundColor Green
+        }
+
+        # Verify functions are now available
+        if (-not (Get-Command -Name 'Get-APHVToolsConfig' -ErrorAction SilentlyContinue)) {
+            throw "Required function Get-APHVToolsConfig is still not available after direct loading"
+        }
+
+        Write-Host "Functions loaded successfully via direct sourcing" -ForegroundColor Green
+    }
+    catch {
+        $errorMsg = "Failed to load APHVTools functions: $($_.Exception.Message)"
+        [System.Windows.MessageBox]::Show($errorMsg, "Module Loading Failed", "OK", "Error")
+        Write-Error $errorMsg
+        exit 1
+    }
 }
 
 # Create the main window
@@ -192,8 +246,17 @@ function Load-Configuration {
         $statusLabel.Content = "Loading configuration..."
         $statusLabel.Foreground = [System.Windows.Media.Brushes]::Orange
 
-        # Get the configuration
+        # Check if required functions are available
+        if (-not (Get-Command -Name 'Get-APHVToolsConfig' -ErrorAction SilentlyContinue)) {
+            throw "Get-APHVToolsConfig function is not available. Please ensure the APHVTools module is properly loaded."
+        }
+
+        # Get the raw configuration data
         $config = Get-APHVToolsConfig -Raw
+
+        if (-not $config) {
+            throw "No configuration data returned. Please ensure APHVTools is properly initialized."
+        }
 
         # Format and display JSON
         $formattedJson = Format-Json -Json ($config | ConvertTo-Json -Depth 10)
