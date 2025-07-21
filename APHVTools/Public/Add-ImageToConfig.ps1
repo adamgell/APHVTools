@@ -10,6 +10,17 @@ function Add-ImageToConfig {
     )
     try {
         Write-Host "Adding $ImageName to config.. " -ForegroundColor Cyan -NoNewline
+
+        # Ensure the images property exists
+        if (-not $script:hvConfig.PSObject.Properties.Name.Contains('images')) {
+            $script:hvConfig | Add-Member -MemberType NoteProperty -Name 'images' -Value @()
+        }
+
+        # Ensure images is an array
+        if ($script:hvConfig.images -eq $null) {
+            $script:hvConfig.images = @()
+        }
+
         if(!$PSBoundParameters.ContainsKey('ReferenceVHDX')){
             $ReferenceVHDX = "$($script:hvConfig.vmPath)\wks$($ImageName)ref.vhdx"
         }
@@ -19,7 +30,7 @@ function Add-ImageToConfig {
             refImagePath = $ReferenceVHDX
         }
         $script:hvConfig.images += $newTenant
-        $script:hvConfig | ConvertTo-Json -Depth 20 | Out-File -FilePath $hvConfig.hvConfigPath -Encoding ascii -Force
+        $script:hvConfig | ConvertTo-Json -Depth 20 | Out-File -FilePath $script:hvConfig.hvConfigPath -Encoding ascii -Force
         Write-Host $script:tick -ForegroundColor Green
         #region Check for ref image - if it's not there, build it
         if (!(Test-Path -Path $newTenant.refImagePath -ErrorAction SilentlyContinue)) {

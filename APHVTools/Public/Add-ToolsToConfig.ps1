@@ -20,7 +20,7 @@ function Add-ToolsToConfig {
         }
 
         # Save the updated config
-        $script:hvConfig | ConvertTo-Json -Depth 20 | Out-File -FilePath $hvConfig.hvConfigPath -Encoding ascii -Force
+        $script:hvConfig | ConvertTo-Json -Depth 20 | Out-File -FilePath $script:hvConfig.hvConfigPath -Encoding ascii -Force
         Write-Host $script:tick -ForegroundColor Green
 
         # Check if tools directory exists, create if not

@@ -15,7 +15,7 @@ function Get-ToolsFromConfig {
             # Add default tools if not configured
             $defaultTools = @("psexec.exe", "procmon.exe", "cmtrace.exe")
             $script:hvConfig | Add-Member -MemberType NoteProperty -Name 'tools' -Value $defaultTools
-            $script:hvConfig | ConvertTo-Json -Depth 20 | Out-File -FilePath $hvConfig.hvConfigPath -Encoding ascii -Force
+            $script:hvConfig | ConvertTo-Json -Depth 20 | Out-File -FilePath $script:hvConfig.hvConfigPath -Encoding ascii -Force
         }
 
         return $script:hvConfig.tools

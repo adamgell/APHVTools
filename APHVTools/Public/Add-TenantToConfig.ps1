@@ -12,13 +12,24 @@ function Add-TenantToConfig {
     )
     try {
         Write-Host "Adding $TenantName to config.. " -ForegroundColor Cyan -NoNewline
+
+        # Ensure the tenantConfig property exists
+        if (-not $script:hvConfig.PSObject.Properties.Name.Contains('tenantConfig')) {
+            $script:hvConfig | Add-Member -MemberType NoteProperty -Name 'tenantConfig' -Value @()
+        }
+
+        # Ensure tenantConfig is an array
+        if ($script:hvConfig.tenantConfig -eq $null) {
+            $script:hvConfig.tenantConfig = @()
+        }
+
         $newTenant = [pscustomobject]@{
             TenantName = $TenantName
             ImageName   = $ImageName
             AdminUpn   = $AdminUpn
         }
         $script:hvConfig.tenantConfig += $newTenant
-        $script:hvConfig | ConvertTo-Json -Depth 20 | Out-File -FilePath $hvConfig.hvConfigPath -Encoding ascii -Force
+        $script:hvConfig | ConvertTo-Json -Depth 20 | Out-File -FilePath $script:hvConfig.hvConfigPath -Encoding ascii -Force
     }
     catch {
         $errorMsg = $_

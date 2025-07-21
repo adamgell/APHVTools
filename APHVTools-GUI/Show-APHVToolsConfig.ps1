@@ -201,37 +201,55 @@ function Populate-TreeView {
     if ($Data -is [System.Collections.IDictionary] -or $Data -is [PSCustomObject]) {
         $properties = $Data | Get-Member -MemberType NoteProperty
         foreach ($prop in $properties) {
+            $value = $Data.$($prop.Name)
             $item = New-Object System.Windows.Controls.TreeViewItem
-            $item.Header = "$($prop.Name): $($prop.PropertyType.Name)"
-
+            if ($value -is [System.Collections.IDictionary] -or $value -is [PSCustomObject]) {
+                $item.Header = "$($prop.Name)"
+                Populate-TreeView -Data $value -Parent $item
+            } elseif ($value -is [System.Collections.IEnumerable] -and $value -isnot [string]) {
+                $item.Header = "$($prop.Name) [Array]"
+                Populate-TreeView -Data $value -Parent $item
+            } else {
+                $item.Header = "$($prop.Name): $value"
+            }
             if ($Parent) {
                 $Parent.Items.Add($item)
             } else {
                 $treeView.Items.Add($item)
             }
-
-            # Recursively add child items
-            Populate-TreeView -Data $Data.$($prop.Name) -Parent $item
         }
     }
     elseif ($Data -is [System.Collections.IEnumerable] -and $Data -isnot [string]) {
-        for ($i = 0; $i -lt $Data.Count; $i++) {
+        $i = 0
+        foreach ($element in $Data) {
             $item = New-Object System.Windows.Controls.TreeViewItem
-            $item.Header = "[$i]: $($Data[$i].GetType().Name)"
+            if ($element -is [System.Collections.IDictionary] -or $element -is [PSCustomObject]) {
+                # Prefer TenantName over imageName
+                $propertyNames = $element | Get-Member -MemberType NoteProperty | ForEach-Object { $_.Name }
+                if ($propertyNames -contains "TenantName") {
+                    $displayName = $element.TenantName
+                } elseif ($propertyNames -contains "imageName") {
+                    $displayName = $element.imageName
+                } elseif ($propertyNames -contains "Name") {
+                    $displayName = $element.Name
+                }
 
+                $item.Header = $displayName
+                Populate-TreeView -Data $element -Parent $item
+            } else {
+                $item.Header = "[$i]: $element"
+            }
             if ($Parent) {
                 $Parent.Items.Add($item)
             } else {
                 $treeView.Items.Add($item)
             }
-
-            Populate-TreeView -Data $Data[$i] -Parent $item
+            $i++
         }
     }
     else {
         $item = New-Object System.Windows.Controls.TreeViewItem
-        $item.Header = "Value: $Data"
-
+        $item.Header = "$Data"
         if ($Parent) {
             $Parent.Items.Add($item)
         } else {
