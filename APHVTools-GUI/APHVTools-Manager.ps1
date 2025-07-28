@@ -1,4 +1,11 @@
 #Requires -Version 5.1
+# REQUIRES: Windows PowerShell with WPF support (not compatible with Linux/WSL)
+
+# Platform check - ensure running on Windows
+if ($PSVersionTable.Platform -eq 'Unix') {
+    Write-Error "APHVTools Manager GUI requires Windows PowerShell with WPF support. Please run on Windows."
+    exit 1
+}
 
 Add-Type -AssemblyName PresentationFramework
 Add-Type -AssemblyName PresentationCore
