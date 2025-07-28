@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 APHVTools automates the creation and management of Intune-managed virtual machines in Hyper-V. The module creates VMs pre-configured for Windows Autopilot enrollment, supporting multi-tenant scenarios.
 
+**Note**: The module was renamed from HVTools to APHVTools. Some file names and references may still use the old name.
+
 ## Build and Development Commands
 
 ### Building
@@ -22,12 +24,13 @@ APHVTools automates the creation and management of Intune-managed virtual machin
 - Create new private function: Add to `/APHVTools/Private/` directory
 - Update module version: Handled automatically by build.ps1
 - Generate release notes: `git log --pretty=format:"- %s" > APHVTools/ReleaseNotes.txt`
-- Commit and push to origin each time you finish a file
+- Check exported functions: `Get-Command -Module APHVTools`
+- View module manifest: `Get-Content ./APHVTools/APHVTools.psd1`
 
 ## Architecture and Key Components
 
 ### Module Loading Pattern
-The root module (`APHVTools.psm1`) dynamically loads all functions from Public/ and Private/ directories. Public functions are automatically exported, while Private functions remain internal.
+The root module (`APHVTools.psm1`) dynamically loads all functions from Public/ and Private/ directories. Public functions are automatically exported, while Private functions remain internal. The module also registers argument completers for parameters like TenantName, ImageName, VSwitchName, providing IntelliSense support.
 
 ### Configuration Management
 - Config stored at: `$env:USERPROFILE\.hvtoolscfgpath` (JSON format)
