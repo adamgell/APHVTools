@@ -51,8 +51,8 @@ function Import-APHVToolsModule {
 if (-not (Import-APHVToolsModule)) {
     [System.Windows.MessageBox]::Show(
         "Failed to load APHVTools module. Please ensure it is properly installed.",
-        "Module Loading Failed", 
-        "OK", 
+        "Module Loading Failed",
+        "OK",
         "Error"
     )
     exit 1
@@ -126,16 +126,200 @@ function Show-Info {
     [System.Windows.MessageBox]::Show($Message, $Title, "OK", "Information")
 }
 
+# Helper function to show Initialize-APHVTools dialog
+function Show-InitializeDialog {
+    $initDialog = New-Object System.Windows.Window
+    $initDialog.Title = "Initialize APHVTools Workspace"
+    $initDialog.Width = 600
+    $initDialog.Height = 350
+    $initDialog.WindowStartupLocation = "CenterOwner"
+    $initDialog.Owner = $window
+
+    $initGrid = New-Object System.Windows.Controls.Grid
+    $initGrid.Margin = New-Object System.Windows.Thickness(20)
+
+    # Create rows
+    for ($i = 0; $i -lt 6; $i++) {
+        $initGrid.RowDefinitions.Add((New-Object System.Windows.Controls.RowDefinition -Property @{Height = "Auto"}))
+    }
+    $initGrid.RowDefinitions.Add((New-Object System.Windows.Controls.RowDefinition -Property @{Height = "*"}))
+
+    $initGrid.ColumnDefinitions.Add((New-Object System.Windows.Controls.ColumnDefinition))
+
+    # Title
+    $titleLabel = New-Object System.Windows.Controls.Label
+    $titleLabel.Content = "APHVTools workspace not found or needs initialization"
+    $titleLabel.FontSize = 14
+    $titleLabel.FontWeight = "Bold"
+    $titleLabel.Margin = New-Object System.Windows.Thickness(0, 0, 0, 10)
+    [System.Windows.Controls.Grid]::SetRow($titleLabel, 0)
+
+    # Description
+    $descLabel = New-Object System.Windows.Controls.Label
+    $descLabel.Content = "Please specify the workspace path where APHVTools will store VMs, configurations, and reference VHDXs:"
+    $descLabel.TextWrapping = "Wrap"
+    $descLabel.Margin = New-Object System.Windows.Thickness(0, 0, 0, 15)
+    [System.Windows.Controls.Grid]::SetRow($descLabel, 1)
+
+    # Path selection
+    $pathLabel = New-Object System.Windows.Controls.Label
+    $pathLabel.Content = "Workspace Path:"
+    $pathLabel.Margin = New-Object System.Windows.Thickness(0, 0, 0, 5)
+    [System.Windows.Controls.Grid]::SetRow($pathLabel, 2)
+
+    $pathPanel = New-Object System.Windows.Controls.StackPanel
+    $pathPanel.Orientation = "Horizontal"
+    $pathPanel.Margin = New-Object System.Windows.Thickness(0, 0, 0, 15)
+
+    $pathTextBox = New-Object System.Windows.Controls.TextBox
+    $pathTextBox.Width = 400
+    $pathTextBox.Margin = New-Object System.Windows.Thickness(0, 0, 10, 0)
+    $pathTextBox.Text = "C:\APHVTools"
+
+    $browseButton = New-Object System.Windows.Controls.Button
+    $browseButton.Content = "Browse..."
+    $browseButton.Padding = New-Object System.Windows.Thickness(15, 5, 15, 5)
+
+    $pathPanel.Children.Add($pathTextBox)
+    $pathPanel.Children.Add($browseButton)
+    [System.Windows.Controls.Grid]::SetRow($pathPanel, 3)
+
+    # Additional options
+    $optionsLabel = New-Object System.Windows.Controls.Label
+    $optionsLabel.Content = "Initialization Options:"
+    $optionsLabel.Margin = New-Object System.Windows.Thickness(0, 0, 0, 5)
+    [System.Windows.Controls.Grid]::SetRow($optionsLabel, 4)
+
+    $optionsPanel = New-Object System.Windows.Controls.StackPanel
+    $optionsPanel.Margin = New-Object System.Windows.Thickness(20, 0, 0, 15)
+
+    $createDirsCheck = New-Object System.Windows.Controls.CheckBox
+    $createDirsCheck.Content = "Create directory structure if it doesn't exist"
+    $createDirsCheck.IsChecked = $true
+    $createDirsCheck.Margin = New-Object System.Windows.Thickness(0, 0, 0, 5)
+
+    $setDefaultCheck = New-Object System.Windows.Controls.CheckBox
+    $setDefaultCheck.Content = "Set as default workspace for future sessions"
+    $setDefaultCheck.IsChecked = $true
+
+    $optionsPanel.Children.Add($createDirsCheck)
+    $optionsPanel.Children.Add($setDefaultCheck)
+    [System.Windows.Controls.Grid]::SetRow($optionsPanel, 5)
+
+    # Button panel
+    $buttonPanel = New-Object System.Windows.Controls.StackPanel
+    $buttonPanel.Orientation = "Horizontal"
+    $buttonPanel.HorizontalAlignment = "Right"
+    $buttonPanel.Margin = New-Object System.Windows.Thickness(0, 20, 0, 0)
+
+    $initButton = New-Object System.Windows.Controls.Button
+    $initButton.Content = "Initialize"
+    $initButton.Width = 100
+    $initButton.Margin = New-Object System.Windows.Thickness(5)
+    $initButton.IsDefault = $true
+
+    $cancelButton = New-Object System.Windows.Controls.Button
+    $cancelButton.Content = "Cancel"
+    $cancelButton.Width = 100
+    $cancelButton.Margin = New-Object System.Windows.Thickness(5)
+    $cancelButton.IsCancel = $true
+
+    $buttonPanel.Children.Add($initButton)
+    $buttonPanel.Children.Add($cancelButton)
+    [System.Windows.Controls.Grid]::SetRow($buttonPanel, 6)
+
+    # Add all controls to grid
+    $initGrid.Children.Add($titleLabel)
+    $initGrid.Children.Add($descLabel)
+    $initGrid.Children.Add($pathLabel)
+    $initGrid.Children.Add($pathPanel)
+    $initGrid.Children.Add($optionsLabel)
+    $initGrid.Children.Add($optionsPanel)
+    $initGrid.Children.Add($buttonPanel)
+
+    $initDialog.Content = $initGrid
+
+    # Browse button handler
+    $browseButton.Add_Click({
+        $folderDialog = New-Object System.Windows.Forms.FolderBrowserDialog
+        $folderDialog.Description = "Select APHVTools workspace directory"
+        $folderDialog.SelectedPath = $pathTextBox.Text
+
+        if ($folderDialog.ShowDialog() -eq "OK") {
+            $pathTextBox.Text = $folderDialog.SelectedPath
+        }
+    })
+
+    # Initialize button handler
+    $initButton.Add_Click({
+        if (-not $pathTextBox.Text) {
+            Show-Error "Please specify a workspace path"
+            return
+        }
+
+        $initDialog.DialogResult = $true
+        $initDialog.Close()
+    })
+
+    # Cancel button handler
+    $cancelButton.Add_Click({
+        $initDialog.DialogResult = $false
+        $initDialog.Close()
+    })
+
+    # Return dialog result and selected path
+    $result = $initDialog.ShowDialog()
+    return @{
+        Success = $result -eq $true
+        Path = $pathTextBox.Text
+        CreateDirectories = $createDirsCheck.IsChecked
+        SetDefault = $setDefaultCheck.IsChecked
+    }
+}
+
 # Helper function to load configuration
 function Get-ConfigurationData {
     try {
         Update-Status "Loading configuration..." "Orange"
         $script:config = Get-APHVToolsConfig -Raw
-        
+
         if (-not $script:config) {
-            throw "No configuration found. Please initialize APHVTools first."
+            # Show initialization dialog
+            $initResult = Show-InitializeDialog
+            
+            if ($initResult.Success) {
+                try {
+                    Update-Status "Initializing APHVTools workspace..." "Orange"
+                    
+                    # Call Initialize-APHVTools with the specified path
+                    if ($initResult.Path) {
+                        Initialize-APHVTools -WorkspacePath $initResult.Path
+                    } else {
+                        Initialize-APHVTools
+                    }
+                    
+                    # Reload configuration after initialization
+                    $script:config = Get-APHVToolsConfig -Raw
+                    
+                    if ($script:config) {
+                        Update-Status "APHVTools workspace initialized successfully" "Green"
+                        Show-Info "APHVTools workspace has been initialized at: $($initResult.Path)"
+                    } else {
+                        throw "Configuration still not available after initialization"
+                    }
+                }
+                catch {
+                    Update-Status "Failed to initialize workspace" "Red"
+                    Show-Error "Failed to initialize APHVTools workspace: $($_.Exception.Message)"
+                    return $false
+                }
+            } else {
+                Update-Status "Initialization cancelled" "Red"
+                Show-Error "APHVTools workspace initialization was cancelled. The application requires a valid workspace to function."
+                return $false
+            }
         }
-        
+
         Update-Status "Configuration loaded successfully" "Green"
         return $true
     }
@@ -265,13 +449,13 @@ $vmTab.Content = $vmGrid
 function Get-VMsForManagement {
     try {
         Update-Status "Loading VMs..." "Orange"
-        
-        $vms = Get-VM | Where-Object { 
-            $_.Name -like "*APHVTools*" -or 
+
+        $vms = Get-VM | Where-Object {
+            $_.Name -like "*APHVTools*" -or
             $_.Notes -like "*APHVTools*" -or
             $_.Path -like "*$($script:config.vmPath)*"
         }
-        
+
         $vmData = @()
         foreach ($vm in $vms) {
             # Extract tenant from VM name or path
@@ -279,7 +463,7 @@ function Get-VMsForManagement {
             if ($vm.Name -match "^(.+?)-") {
                 $tenant = $matches[1]
             }
-            
+
             $vmInfo = [PSCustomObject]@{
                 Name = $vm.Name
                 State = $vm.State
@@ -292,10 +476,10 @@ function Get-VMsForManagement {
             }
             $vmData += $vmInfo
         }
-        
+
         $script:vmList = $vmData
         $vmListView.ItemsSource = $vmData
-        
+
         Update-Status "Loaded $($vmData.Count) VMs" "Green"
     }
     catch {
@@ -351,7 +535,7 @@ $stopVMButton.Add_Click({
             "YesNo",
             "Question"
         )
-        
+
         if ($result -eq "Yes") {
             try {
                 Update-Status "Stopping VM: $($selectedVM.Name)" "Orange"
@@ -390,7 +574,7 @@ $deleteVMButton.Add_Click({
             "YesNo",
             "Warning"
         )
-        
+
         if ($result -eq "Yes") {
             try {
                 Update-Status "Deleting VM: $($selectedVM.Name)" "Orange"
@@ -639,12 +823,12 @@ $createVMButton.Add_Click({
         Show-Error "Please select a tenant"
         return
     }
-    
+
     $outputTextBox.Clear()
     $progressBar.Visibility = "Visible"
     $progressLabel.Visibility = "Visible"
     $createVMButton.IsEnabled = $false
-    
+
     try {
         $params = @{
             TenantName = $tenantCombo.SelectedItem.TenantName
@@ -652,41 +836,41 @@ $createVMButton.Add_Click({
             CPUsPerVM = $cpuCombo.SelectedValue
             VMMemory = "$($memoryCombo.SelectedValue)GB"
         }
-        
+
         if ($imageCombo.SelectedItem) {
             $params.OSBuild = $imageCombo.SelectedItem.imageName
         }
-        
+
         if ($prefixTextBox.Text) {
             $params.NamePrefix = $prefixTextBox.Text
         }
-        
+
         if ($skipAutopilotCheck.IsChecked) {
             $params.SkipAutoPilot = $true
         }
-        
+
         if ($includeToolsCheck.IsChecked) {
             $params.IncludeTools = $true
         }
-        
+
         $outputTextBox.AppendText("Starting VM creation...`n")
         $outputTextBox.AppendText("Parameters:`n")
         $params.GetEnumerator() | ForEach-Object {
             $outputTextBox.AppendText("  $($_.Key): $($_.Value)`n")
         }
         $outputTextBox.AppendText("`n")
-        
+
         # Note: In a real implementation, you would run this asynchronously
         # For now, we'll just show a message
         $outputTextBox.AppendText("Creating VMs...`n")
-        
+
         # Simulate progress
         for ($i = 1; $i -le $params.NumberOfVMs; $i++) {
             $progressBar.Value = ($i / $params.NumberOfVMs) * 100
             $progressLabel.Content = "Creating VM $i of $($params.NumberOfVMs)"
             Start-Sleep -Milliseconds 500
         }
-        
+
         $outputTextBox.AppendText("VM creation completed successfully!`n")
         Update-Status "Created $($params.NumberOfVMs) VMs successfully" "Green"
     }
@@ -807,11 +991,11 @@ $imageTab.Content = $imageGrid
 function Get-ImageData {
     try {
         Update-Status "Loading images..." "Orange"
-        
+
         if (-not $script:config) {
             Get-ConfigurationData
         }
-        
+
         $imageData = @()
         foreach ($image in $script:config.images) {
             $imageInfo = [PSCustomObject]@{
@@ -824,7 +1008,7 @@ function Get-ImageData {
             }
             $imageData += $imageInfo
         }
-        
+
         $imageListView.ItemsSource = $imageData
         Update-Status "Loaded $($imageData.Count) images" "Green"
     }
@@ -841,7 +1025,7 @@ $imageListView.Add_SelectionChanged({
         $deleteImageButton.IsEnabled = $true
         $createVHDXButton.IsEnabled = $selectedImage.Type -eq "ISO" -and $selectedImage.Status -eq "Missing VHDX"
         $validateImageButton.IsEnabled = $true
-        
+
         # Update details
         $details = @"
 Name: $($selectedImage.imageName)
@@ -869,91 +1053,91 @@ $addImageButton.Add_Click({
     $addDialog.Height = 300
     $addDialog.WindowStartupLocation = "CenterOwner"
     $addDialog.Owner = $window
-    
+
     $addGrid = New-Object System.Windows.Controls.Grid
     $addGrid.Margin = New-Object System.Windows.Thickness(10)
-    
+
     for ($i = 0; $i -lt 5; $i++) {
         $addGrid.RowDefinitions.Add((New-Object System.Windows.Controls.RowDefinition -Property @{Height = "Auto"}))
     }
-    
+
     $addGrid.ColumnDefinitions.Add((New-Object System.Windows.Controls.ColumnDefinition -Property @{Width = "100"}))
     $addGrid.ColumnDefinitions.Add((New-Object System.Windows.Controls.ColumnDefinition -Property @{Width = "*"}))
-    
+
     # Image name
     $nameLabel = New-Object System.Windows.Controls.Label
     $nameLabel.Content = "Image Name:"
-    
+
     $nameTextBox = New-Object System.Windows.Controls.TextBox
     $nameTextBox.Margin = New-Object System.Windows.Thickness(5)
-    
+
     [System.Windows.Controls.Grid]::SetRow($nameLabel, 0)
     [System.Windows.Controls.Grid]::SetColumn($nameLabel, 0)
     [System.Windows.Controls.Grid]::SetRow($nameTextBox, 0)
     [System.Windows.Controls.Grid]::SetColumn($nameTextBox, 1)
-    
+
     # Image path
     $pathLabel = New-Object System.Windows.Controls.Label
     $pathLabel.Content = "Image Path:"
-    
+
     $pathPanel = New-Object System.Windows.Controls.StackPanel
     $pathPanel.Orientation = "Horizontal"
-    
+
     $pathTextBox = New-Object System.Windows.Controls.TextBox
     $pathTextBox.Margin = New-Object System.Windows.Thickness(5)
     $pathTextBox.Width = 300
-    
+
     $browseButton = New-Object System.Windows.Controls.Button
     $browseButton.Content = "Browse..."
     $browseButton.Margin = New-Object System.Windows.Thickness(5)
     $browseButton.Padding = New-Object System.Windows.Thickness(10, 5, 10, 5)
-    
+
     $pathPanel.Children.Add($pathTextBox)
     $pathPanel.Children.Add($browseButton)
-    
+
     [System.Windows.Controls.Grid]::SetRow($pathLabel, 1)
     [System.Windows.Controls.Grid]::SetColumn($pathLabel, 0)
     [System.Windows.Controls.Grid]::SetRow($pathPanel, 1)
     [System.Windows.Controls.Grid]::SetColumn($pathPanel, 1)
-    
+
     # Button panel
     $buttonPanel = New-Object System.Windows.Controls.StackPanel
     $buttonPanel.Orientation = "Horizontal"
     $buttonPanel.HorizontalAlignment = "Right"
     $buttonPanel.Margin = New-Object System.Windows.Thickness(0, 20, 0, 0)
-    
+
     $okButton = New-Object System.Windows.Controls.Button
     $okButton.Content = "Add"
     $okButton.Width = 80
     $okButton.Margin = New-Object System.Windows.Thickness(5)
     $okButton.IsDefault = $true
-    
+
     $cancelButton = New-Object System.Windows.Controls.Button
     $cancelButton.Content = "Cancel"
     $cancelButton.Width = 80
     $cancelButton.Margin = New-Object System.Windows.Thickness(5)
     $cancelButton.IsCancel = $true
-    
+
     $buttonPanel.Children.Add($okButton)
     $buttonPanel.Children.Add($cancelButton)
-    
+
     [System.Windows.Controls.Grid]::SetRow($buttonPanel, 4)
     [System.Windows.Controls.Grid]::SetColumn($buttonPanel, 0)
     [System.Windows.Controls.Grid]::SetColumnSpan($buttonPanel, 2)
-    
+
     $addGrid.Children.Add($nameLabel)
     $addGrid.Children.Add($nameTextBox)
     $addGrid.Children.Add($pathLabel)
     $addGrid.Children.Add($pathPanel)
     $addGrid.Children.Add($buttonPanel)
-    
+
     $addDialog.Content = $addGrid
-    
+
     # Browse button handler
     $browseButton.Add_Click({
         $openFileDialog = New-Object System.Windows.Forms.OpenFileDialog
         $openFileDialog.Filter = "Windows Images|*.iso;*.vhdx|ISO files (*.iso)|*.iso|VHDX files (*.vhdx)|*.vhdx|All files (*.*)|*.*"
-        
+
         if ($openFileDialog.ShowDialog() -eq "OK") {
             $pathTextBox.Text = $openFileDialog.FileName
             if (-not $nameTextBox.Text) {
@@ -961,35 +1145,35 @@ $addImageButton.Add_Click({
             }
         }
     })
-    
+
     # OK button handler
     $okButton.Add_Click({
         if (-not $nameTextBox.Text -or -not $pathTextBox.Text) {
             Show-Error "Please provide both image name and path"
             return
         }
-        
+
         if (-not (Test-Path $pathTextBox.Text)) {
             Show-Error "The specified image file does not exist"
             return
         }
-        
+
         $addDialog.DialogResult = $true
         $addDialog.Close()
     })
-    
+
     $cancelButton.Add_Click({
         $addDialog.DialogResult = $false
         $addDialog.Close()
     })
-    
+
     if ($addDialog.ShowDialog()) {
         try {
             Update-Status "Adding image..." "Orange"
-            
+
             # In a real implementation, you would call Add-ImageToConfig here
             Show-Info "Image would be added:`nName: $($nameTextBox.Text)`nPath: $($pathTextBox.Text)"
-            
+
             Get-ImageData
             Update-Status "Image added successfully" "Green"
         }
@@ -1106,11 +1290,11 @@ $tenantTab.Content = $tenantGrid
 function Get-TenantData {
     try {
         Update-Status "Loading tenants..." "Orange"
-        
+
         if (-not $script:config) {
             Get-ConfigurationData
         }
-        
+
         $tenantData = @()
         foreach ($tenant in $script:config.tenantConfig) {
             # Count VMs for this tenant
@@ -1118,7 +1302,7 @@ function Get-TenantData {
             if ($script:vmList) {
                 $vmCount = ($script:vmList | Where-Object { $_.Tenant -eq $tenant.TenantName }).Count
             }
-            
+
             $tenantInfo = [PSCustomObject]@{
                 TenantName = $tenant.TenantName
                 AdminUpn = $tenant.AdminUpn
@@ -1128,10 +1312,10 @@ function Get-TenantData {
             }
             $tenantData += $tenantInfo
         }
-        
+
         $tenantListView.ItemsSource = $tenantData
         $tenantCombo.ItemsSource = $tenantData
-        
+
         Update-Status "Loaded $($tenantData.Count) tenants" "Green"
     }
     catch {
@@ -1147,7 +1331,7 @@ $tenantListView.Add_SelectionChanged({
         $editTenantButton.IsEnabled = $true
         $deleteTenantButton.IsEnabled = $true
         $testAuthButton.IsEnabled = $true
-        
+
         # Update details
         $details = @"
 Tenant: $($selectedTenant.TenantName)
@@ -1176,80 +1360,80 @@ $addTenantButton.Add_Click({
     $addDialog.Height = 350
     $addDialog.WindowStartupLocation = "CenterOwner"
     $addDialog.Owner = $window
-    
+
     $addGrid = New-Object System.Windows.Controls.Grid
     $addGrid.Margin = New-Object System.Windows.Thickness(10)
-    
+
     for ($i = 0; $i -lt 6; $i++) {
         $addGrid.RowDefinitions.Add((New-Object System.Windows.Controls.RowDefinition -Property @{Height = "Auto"}))
     }
-    
+
     $addGrid.ColumnDefinitions.Add((New-Object System.Windows.Controls.ColumnDefinition -Property @{Width = "120"}))
     $addGrid.ColumnDefinitions.Add((New-Object System.Windows.Controls.ColumnDefinition -Property @{Width = "*"}))
-    
+
     # Tenant name
     $nameLabel = New-Object System.Windows.Controls.Label
     $nameLabel.Content = "Tenant Name:"
-    
+
     $nameTextBox = New-Object System.Windows.Controls.TextBox
     $nameTextBox.Margin = New-Object System.Windows.Thickness(5)
-    
+
     [System.Windows.Controls.Grid]::SetRow($nameLabel, 0)
     [System.Windows.Controls.Grid]::SetColumn($nameLabel, 0)
     [System.Windows.Controls.Grid]::SetRow($nameTextBox, 0)
     [System.Windows.Controls.Grid]::SetColumn($nameTextBox, 1)
-    
+
     # Admin UPN
     $upnLabel = New-Object System.Windows.Controls.Label
     $upnLabel.Content = "Admin UPN:"
-    
+
     $upnTextBox = New-Object System.Windows.Controls.TextBox
     $upnTextBox.Margin = New-Object System.Windows.Thickness(5)
-    
+
     [System.Windows.Controls.Grid]::SetRow($upnLabel, 1)
     [System.Windows.Controls.Grid]::SetColumn($upnLabel, 0)
     [System.Windows.Controls.Grid]::SetRow($upnTextBox, 1)
     [System.Windows.Controls.Grid]::SetColumn($upnTextBox, 1)
-    
+
     # Default image
     $imageLabel = New-Object System.Windows.Controls.Label
     $imageLabel.Content = "Default Image:"
-    
+
     $imageComboBox = New-Object System.Windows.Controls.ComboBox
     $imageComboBox.Margin = New-Object System.Windows.Thickness(5)
     $imageComboBox.DisplayMemberPath = "imageName"
     $imageComboBox.ItemsSource = $imageListView.ItemsSource
-    
+
     [System.Windows.Controls.Grid]::SetRow($imageLabel, 2)
     [System.Windows.Controls.Grid]::SetColumn($imageLabel, 0)
     [System.Windows.Controls.Grid]::SetRow($imageComboBox, 2)
     [System.Windows.Controls.Grid]::SetColumn($imageComboBox, 1)
-    
+
     # Button panel
     $buttonPanel = New-Object System.Windows.Controls.StackPanel
     $buttonPanel.Orientation = "Horizontal"
     $buttonPanel.HorizontalAlignment = "Right"
     $buttonPanel.Margin = New-Object System.Windows.Thickness(0, 20, 0, 0)
-    
+
     $okButton = New-Object System.Windows.Controls.Button
     $okButton.Content = "Add"
     $okButton.Width = 80
     $okButton.Margin = New-Object System.Windows.Thickness(5)
     $okButton.IsDefault = $true
-    
+
     $cancelButton = New-Object System.Windows.Controls.Button
     $cancelButton.Content = "Cancel"
     $cancelButton.Width = 80
     $cancelButton.Margin = New-Object System.Windows.Thickness(5)
     $cancelButton.IsCancel = $true
-    
+
     $buttonPanel.Children.Add($okButton)
     $buttonPanel.Children.Add($cancelButton)
-    
+
     [System.Windows.Controls.Grid]::SetRow($buttonPanel, 5)
     [System.Windows.Controls.Grid]::SetColumn($buttonPanel, 0)
     [System.Windows.Controls.Grid]::SetColumnSpan($buttonPanel, 2)
-    
+
     $addGrid.Children.Add($nameLabel)
     $addGrid.Children.Add($nameTextBox)
     $addGrid.Children.Add($upnLabel)
@@ -1257,32 +1441,32 @@ $addTenantButton.Add_Click({
     $addGrid.Children.Add($imageLabel)
     $addGrid.Children.Add($imageComboBox)
     $addGrid.Children.Add($buttonPanel)
-    
+
     $addDialog.Content = $addGrid
-    
+
     # OK button handler
     $okButton.Add_Click({
         if (-not $nameTextBox.Text -or -not $upnTextBox.Text -or -not $imageComboBox.SelectedItem) {
             Show-Error "Please fill in all fields"
             return
         }
-        
+
         $addDialog.DialogResult = $true
         $addDialog.Close()
     })
-    
+
     $cancelButton.Add_Click({
         $addDialog.DialogResult = $false
         $addDialog.Close()
     })
-    
+
     if ($addDialog.ShowDialog()) {
         try {
             Update-Status "Adding tenant..." "Orange"
-            
+
             # In a real implementation, you would call Add-TenantToConfig here
             Show-Info "Tenant would be added:`nName: $($nameTextBox.Text)`nAdmin: $($upnTextBox.Text)`nImage: $($imageComboBox.SelectedItem.imageName)"
-            
+
             Get-TenantData
             Update-Status "Tenant added successfully" "Green"
         }
@@ -1297,10 +1481,10 @@ $testAuthButton.Add_Click({
     if ($selectedTenant) {
         try {
             Update-Status "Testing authentication for $($selectedTenant.TenantName)..." "Orange"
-            
+
             # In a real implementation, you would test the authentication here
             Show-Info "Authentication test would be performed for tenant: $($selectedTenant.TenantName)"
-            
+
             Update-Status "Authentication test completed" "Green"
         }
         catch {
@@ -1334,8 +1518,14 @@ $exportConfigButton = New-Object System.Windows.Controls.Button
 $exportConfigButton.Content = "Export JSON"
 $exportConfigButton.Padding = New-Object System.Windows.Thickness(10, 5, 10, 5)
 
+$reinitButton = New-Object System.Windows.Controls.Button
+$reinitButton.Content = "Reinitialize Workspace"
+$reinitButton.Padding = New-Object System.Windows.Thickness(10, 5, 10, 5)
+$reinitButton.Margin = New-Object System.Windows.Thickness(10, 0, 0, 0)
+
 $configToolbar.Children.Add($refreshConfigButton)
 $configToolbar.Children.Add($exportConfigButton)
+$configToolbar.Children.Add($reinitButton)
 
 # Config text box
 $configTextBox = New-Object System.Windows.Controls.TextBox
@@ -1374,7 +1564,7 @@ $exportConfigButton.Add_Click({
         $saveFileDialog.Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*"
         $saveFileDialog.DefaultExt = "json"
         $saveFileDialog.FileName = "APHVTools-Config-$(Get-Date -Format 'yyyyMMdd-HHmmss').json"
-        
+
         if ($saveFileDialog.ShowDialog()) {
             $configTextBox.Text | Out-File -FilePath $saveFileDialog.FileName -Encoding UTF8
             Update-Status "Configuration exported successfully" "Green"
@@ -1383,6 +1573,52 @@ $exportConfigButton.Add_Click({
     }
     catch {
         Show-Error "Failed to export configuration: $($_.Exception.Message)"
+    }
+})
+
+$reinitButton.Add_Click({
+    $result = [System.Windows.MessageBox]::Show(
+        "This will reinitialize the APHVTools workspace. This may change configuration paths and settings.`n`nDo you want to continue?",
+        "Reinitialize Workspace",
+        "YesNo",
+        "Question"
+    )
+    
+    if ($result -eq "Yes") {
+        try {
+            $initResult = Show-InitializeDialog
+            
+            if ($initResult.Success) {
+                Update-Status "Reinitializing APHVTools workspace..." "Orange"
+                
+                # Call Initialize-APHVTools with the specified path
+                if ($initResult.Path) {
+                    Initialize-APHVTools -WorkspacePath $initResult.Path -Force
+                } else {
+                    Initialize-APHVTools -Force
+                }
+                
+                # Reload configuration after reinitialization
+                $script:config = Get-APHVToolsConfig -Raw
+                
+                if ($script:config) {
+                    Update-Status "Workspace reinitialized successfully" "Green"
+                    Show-Info "APHVTools workspace has been reinitialized at: $($initResult.Path)"
+                    
+                    # Refresh all data
+                    Get-ConfigurationData
+                    Get-VMsForManagement
+                    Get-ImageData  
+                    Get-TenantData
+                } else {
+                    throw "Configuration not available after reinitialization"
+                }
+            }
+        }
+        catch {
+            Update-Status "Failed to reinitialize workspace" "Red"
+            Show-Error "Failed to reinitialize APHVTools workspace: $($_.Exception.Message)"
+        }
     }
 })
 
@@ -1414,7 +1650,7 @@ $window.Add_Loaded({
         Get-VMsForManagement
         Get-ImageData
         Get-TenantData
-        
+
         # Load images into create tab combo
         $imageCombo.ItemsSource = $script:config.images
     }
