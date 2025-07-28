@@ -111,7 +111,7 @@ function Show-Info {
 }
 
 # Helper function to load configuration
-function Load-Configuration {
+function Get-ConfigurationData {
     try {
         Update-Status "Loading configuration..." "Orange"
         $script:config = Get-APHVToolsConfig -Raw
@@ -788,12 +788,12 @@ $imageGrid.Children.Add($imageDetailsPanel)
 $imageTab.Content = $imageGrid
 
 # Image management functions
-function Load-Images {
+function Get-ImageData {
     try {
         Update-Status "Loading images..." "Orange"
         
         if (-not $script:config) {
-            Load-Configuration
+            Get-ConfigurationData
         }
         
         $imageData = @()
@@ -972,9 +972,9 @@ $addImageButton.Add_Click({
             Update-Status "Adding image..." "Orange"
             
             # In a real implementation, you would call Add-ImageToConfig here
-            Show-Info "Image would be added:`nName: $($nameTextBox.Text)`nPath: $($pathTextBox.Text)")
+            Show-Info "Image would be added:`nName: $($nameTextBox.Text)`nPath: $($pathTextBox.Text)"
             
-            Load-Images
+            Get-ImageData
             Update-Status "Image added successfully" "Green"
         }
         catch {
@@ -1087,12 +1087,12 @@ $tenantGrid.Children.Add($tenantDetailsPanel)
 $tenantTab.Content = $tenantGrid
 
 # Tenant management functions
-function Load-Tenants {
+function Get-TenantData {
     try {
         Update-Status "Loading tenants..." "Orange"
         
         if (-not $script:config) {
-            Load-Configuration
+            Get-ConfigurationData
         }
         
         $tenantData = @()
@@ -1265,9 +1265,9 @@ $addTenantButton.Add_Click({
             Update-Status "Adding tenant..." "Orange"
             
             # In a real implementation, you would call Add-TenantToConfig here
-            Show-Info "Tenant would be added:`nName: $($nameTextBox.Text)`nAdmin: $($upnTextBox.Text)`nImage: $($imageComboBox.SelectedItem.imageName)")
+            Show-Info "Tenant would be added:`nName: $($nameTextBox.Text)`nAdmin: $($upnTextBox.Text)`nImage: $($imageComboBox.SelectedItem.imageName)"
             
-            Load-Tenants
+            Get-TenantData
             Update-Status "Tenant added successfully" "Green"
         }
         catch {
@@ -1283,7 +1283,7 @@ $testAuthButton.Add_Click({
             Update-Status "Testing authentication for $($selectedTenant.TenantName)..." "Orange"
             
             # In a real implementation, you would test the authentication here
-            Show-Info "Authentication test would be performed for tenant: $($selectedTenant.TenantName)")
+            Show-Info "Authentication test would be performed for tenant: $($selectedTenant.TenantName)"
             
             Update-Status "Authentication test completed" "Green"
         }
@@ -1394,10 +1394,10 @@ $window.Content = $mainGrid
 
 # Initialize on startup
 $window.Add_Loaded({
-    if (Load-Configuration) {
+    if (Get-ConfigurationData) {
         Get-VMsForManagement
-        Load-Images
-        Load-Tenants
+        Get-ImageData
+        Get-TenantData
         
         # Load images into create tab combo
         $imageCombo.ItemsSource = $script:config.images
