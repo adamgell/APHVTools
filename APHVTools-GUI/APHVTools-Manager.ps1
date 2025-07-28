@@ -1,6 +1,8 @@
 #Requires -Version 5.1
 
 Add-Type -AssemblyName PresentationFramework
+Add-Type -AssemblyName PresentationCore
+Add-Type -AssemblyName WindowsBase
 Add-Type -AssemblyName System.Windows.Forms
 
 # Function to load APHVTools module
@@ -80,11 +82,18 @@ $headerPanel.Children.Add($titleLabel)
 # Create the main tab control
 $tabControl = New-Object System.Windows.Controls.TabControl
 
-# Create status bar
-$statusBar = New-Object System.Windows.Controls.StatusBar
-$statusBarItem = New-Object System.Windows.Controls.StatusBarItem
-$statusBarItem.Content = "Ready"
-$statusBar.Items.Add($statusBarItem)
+# Create status panel (using Border and TextBlock instead of StatusBar)
+$statusPanel = New-Object System.Windows.Controls.Border
+$statusPanel.BorderBrush = [System.Windows.Media.Brushes]::Gray
+$statusPanel.BorderThickness = New-Object System.Windows.Thickness(0, 1, 0, 0)
+$statusPanel.Background = [System.Windows.Media.Brushes]::LightGray
+$statusPanel.Height = 25
+
+$statusText = New-Object System.Windows.Controls.TextBlock
+$statusText.Text = "Ready"
+$statusText.Margin = New-Object System.Windows.Thickness(5, 2, 5, 2)
+$statusText.VerticalAlignment = "Center"
+$statusPanel.Child = $statusText
 
 # Global variables
 $script:config = $null
@@ -93,8 +102,8 @@ $script:vmList = @()
 # Helper function to update status
 function Update-Status {
     param([string]$Message, [string]$Color = "Black")
-    $statusBarItem.Content = $Message
-    $statusBar.Foreground = $Color
+    $statusText.Text = $Message
+    $statusText.Foreground = $Color
     $window.Dispatcher.Invoke([action]{}, "Render")
 }
 
@@ -1382,12 +1391,12 @@ $tabControl.Items.Add($configTab)
 # Set grid positions
 [System.Windows.Controls.Grid]::SetRow($headerPanel, 0)
 [System.Windows.Controls.Grid]::SetRow($tabControl, 1)
-[System.Windows.Controls.Grid]::SetRow($statusBar, 2)
+[System.Windows.Controls.Grid]::SetRow($statusPanel, 2)
 
 # Add controls to main grid
 $mainGrid.Children.Add($headerPanel)
 $mainGrid.Children.Add($tabControl)
-$mainGrid.Children.Add($statusBar)
+$mainGrid.Children.Add($statusPanel)
 
 # Set window content
 $window.Content = $mainGrid
